@@ -2,11 +2,12 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { StatementUploadPage } from "@/components/statements/statement-upload-page";
 import { uploadStatement } from "@/lib/api/statements";
-import { createTransactionBatch, getAccounts, getCategories } from "@/lib/api/transactions";
+import { createAccount, createTransactionBatch, getAccounts, getCategories } from "@/lib/api/transactions";
 import { accounts, categories, parsedTransactions, pdfFile, uploadResult } from "@/test/fixtures";
 
 jest.mock("@/lib/api/statements", () => ({ uploadStatement: jest.fn() }));
 jest.mock("@/lib/api/transactions", () => ({
+  createAccount: jest.fn(),
   createTransactionBatch: jest.fn(),
   getAccounts: jest.fn(),
   getCategories: jest.fn(),
@@ -14,6 +15,7 @@ jest.mock("@/lib/api/transactions", () => ({
 
 const mockedUpload = jest.mocked(uploadStatement);
 const mockedBatch = jest.mocked(createTransactionBatch);
+const mockedCreateAccount = jest.mocked(createAccount);
 const mockedAccounts = jest.mocked(getAccounts);
 const mockedCategories = jest.mocked(getCategories);
 
@@ -227,6 +229,26 @@ describe("StatementUploadPage", () => {
 
     expect(screen.getByText(/no account exists yet/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save 1 transaction" })).toBeDisabled();
+  });
+
+  it("creates the first account inline and saves the batch to it", async () => {
+    const user = userEvent.setup();
+    mockedAccounts.mockResolvedValue([]);
+    mockedCreateAccount.mockResolvedValue({ id: 12, bankName: "TD Bank", accountNumberLast4: "7788", currency: "CAD" });
+    render(<StatementUploadPage />);
+    await uploadFixtureStatement(user);
+
+    const form = screen.getByRole("form", { name: "Create account" });
+    expect(within(form).getByLabelText("Bank name")).toHaveValue(uploadResult.bankName);
+    await user.type(within(form).getByLabelText("Last 4 digits"), "7788");
+    await user.click(within(form).getByRole("button", { name: "Create account" }));
+
+    expect(mockedCreateAccount).toHaveBeenCalledWith({ bankName: uploadResult.bankName, accountNumberLast4: "7788", currency: "CAD" });
+    expect(await screen.findByLabelText("Destination account")).toHaveValue("12");
+    expect(screen.queryByRole("form", { name: "Create account" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save 1 transaction" }));
+    expect(mockedBatch.mock.calls[0][0].accountId).toBe(12);
   });
 
   it("discards the review when the reviewer starts over", async () => {

@@ -5,6 +5,7 @@ import type {
 } from "@/lib/types/statement";
 import type {
   Account,
+  AccountCreateInput,
   Category,
   PageResponse,
   Transaction,
@@ -31,6 +32,13 @@ export function createTransactionBatch(input: TransactionBatchInput) {
 
 export function getAccounts(signal?: AbortSignal) {
   return apiRequest<Account[]>("/accounts", { signal });
+}
+
+export function createAccount(input: AccountCreateInput) {
+  return apiRequest<Account>("/accounts", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export function getCategories(signal?: AbortSignal) {

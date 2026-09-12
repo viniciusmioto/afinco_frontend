@@ -21,7 +21,7 @@ export function AppShell({ children, current = "Transactions" }: { children: Rea
   return (
     <AuthGate>
       <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-slate-800 bg-ink px-5 py-7 text-white lg:flex lg:flex-col">
+        <aside className="hidden border-r border-slate-800 bg-ink px-5 py-7 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
           <div className="flex items-center gap-3 px-2">
             <span className="grid size-10 place-items-center rounded-xl bg-blue-700 shadow-lg shadow-blue-950/30">
               <WalletCards aria-hidden="true" className="size-5" />

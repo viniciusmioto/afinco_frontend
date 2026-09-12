@@ -13,7 +13,8 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig = {
-  output: "standalone",
+  // Only the container image needs the standalone server; `next start` warns when it is enabled.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   poweredByHeader: false,
   async headers() {
     return [

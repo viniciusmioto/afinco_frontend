@@ -1,4 +1,4 @@
-import { createTransactionBatch, getAccounts, getCategories } from "@/lib/api/transactions";
+import { createAccount, createTransactionBatch, getAccounts, getCategories } from "@/lib/api/transactions";
 import { accounts, categories } from "@/test/fixtures";
 
 const mockedFetch = jest.fn();
@@ -64,6 +64,18 @@ describe("reference data", () => {
 
     await expect(getAccounts()).resolves.toEqual(accounts);
     expect(mockedFetch.mock.calls[0][0]).toBe("/api/v1/accounts");
+  });
+
+  it("creates an account with a CSRF-protected JSON request", async () => {
+    const input = { bankName: "TD Bank", accountNumberLast4: "2048", currency: "CAD" };
+    mockedFetch.mockResolvedValue(jsonResponse(accounts[0], 201));
+
+    await expect(createAccount(input)).resolves.toEqual(accounts[0]);
+    const [url, init] = mockedFetch.mock.calls[0];
+    expect(url).toBe("/api/v1/accounts");
+    expect(init.method).toBe("POST");
+    expect(init.headers["X-XSRF-TOKEN"]).toBe("test-csrf-token");
+    expect(JSON.parse(init.body)).toEqual(input);
   });
 
   it("loads categories", async () => {

@@ -9,6 +9,12 @@ export interface Account {
   currency: string;
 }
 
+export interface AccountCreateInput {
+  bankName: string;
+  accountNumberLast4: string;
+  currency: string;
+}
+
 export interface Category {
   id: number;
   name: string;

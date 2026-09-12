@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AccountCreateForm } from "@/components/accounts/account-create-form";
 import { uploadStatement } from "@/lib/api/statements";
 import { createTransactionBatch, getAccounts, getCategories } from "@/lib/api/transactions";
 import { formatCurrency } from "@/lib/formatters";
@@ -273,10 +274,14 @@ export function StatementUploadPage() {
             aria-label="Batch save"
             className="sticky bottom-0 mt-5 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-panel backdrop-blur sm:p-5"
           >
-            {accounts.length === 0 && (
-              <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
-                No account exists yet, so reviewed rows cannot be saved. Create an account in the database first.
-              </p>
+            {accounts.length === 0 && !referenceError && (
+              <AccountCreateForm
+                defaultBankName={result.bankName}
+                onCreated={(account) => {
+                  setAccounts([account]);
+                  setAccountId(String(account.id));
+                }}
+              />
             )}
             {saveError && (
               <p className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">

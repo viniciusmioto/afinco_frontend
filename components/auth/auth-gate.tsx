@@ -1,8 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { ApiError } from "@/lib/api/client";
-import { getCurrentUser } from "@/lib/api/auth";
+import { getSession } from "@/lib/api/auth";
 import type { AuthenticatedUser } from "@/lib/types/auth";
 
 const AuthContext = createContext<AuthenticatedUser | null>(null);
@@ -21,15 +20,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     const controller = new AbortController();
     setError(null);
-    getCurrentUser(controller.signal)
-      .then(setUser)
-      .catch((reason: unknown) => {
-        if (controller.signal.aborted) return;
-        if (reason instanceof ApiError && reason.status === 401) {
-          const returnTo = `${window.location.pathname}${window.location.search}`;
-          window.location.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+    getSession(controller.signal)
+      .then((session) => {
+        if (session.authenticated && session.user) {
+          setUser(session.user);
           return;
         }
+        const returnTo = `${window.location.pathname}${window.location.search}`;
+        window.location.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+      })
+      .catch((reason: unknown) => {
+        if (controller.signal.aborted) return;
         setError(reason instanceof Error ? reason.message : "Unable to verify your session");
       });
     return () => controller.abort();

@@ -91,7 +91,7 @@ export function ManualEntryModal({
         <form className="space-y-5 p-5 sm:p-6" onSubmit={handleSubmit}>
           {(accounts.length === 0 || categories.length === 0) && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
-              At least one account and category are required before creating a manual entry.
+              At least one account and category are required. Import a statement to create your first account.
             </div>
           )}
           {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</div>}

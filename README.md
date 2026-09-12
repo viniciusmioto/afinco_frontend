@@ -7,8 +7,9 @@ App Router, React 19, TypeScript, Tailwind CSS, and Lucide icons.
 
 An authenticated login flow and two finance screens are built and tested:
 `/transactions` (ledger with local search and filters, manual entry) and
-`/upload` (PDF statement import with duplicate resolution and batch save).
-94 tests pass across 13 suites.
+`/upload` (PDF statement import with first-account creation, duplicate
+resolution, and batch save). 102 tests pass across 15 suites; lint, type
+checking, and the production build report no warnings.
 
 Requires the [afinco_backend](https://github.com/viniciusmioto/afinco_backend)
 API. The backend owns authentication and finance data; this application keeps
@@ -24,7 +25,10 @@ Password: 123@Test
 ```
 
 Protected routes perform a quick cookie-presence redirect and then verify the
-session with the backend before rendering finance data. The middleware check is
+session with the backend's public `GET /api/v1/auth/session` probe before
+rendering finance data. Because the probe always answers `200`, a stale cookie
+(for example after a backend restart) redirects to login without a console
+error. The middleware check is
 only a UX optimization; backend authorization remains the security boundary.
 Unsafe API calls obtain a CSRF cookie and echo its token in `X-XSRF-TOKEN`.
 Logout invalidates the backend session.
@@ -43,34 +47,33 @@ outside a trusted LAN. When HTTPS is terminated by a homelab reverse proxy, set
 
 Ordered roughly by how much each one blocks real use.
 
-1. **Account creation — blocking.** Neither screen can create an account, and
-   the backend has no endpoint for it. On a fresh database `/upload` correctly
-   explains that reviewed rows cannot be saved, and the manual-entry modal
-   disables submission — but the user has no way out except editing SQLite by
-   hand.
-2. **Overview dashboard.** The `Overview` sidebar entry is a placeholder with no
+1. **Overview dashboard.** The `Overview` sidebar entry is a placeholder with no
    route. No charts exist anywhere yet and **Recharts is not installed**, so the
    whole analytics surface described in the project goal is outstanding: a
    dual-axis bar/line monthly trend (bars = expenses, line = net flow),
    colourblind-safe categorical distribution bars, and pie charts reserved
    strictly for binary splits such as credit vs. debit. It also needs backend
    aggregation endpoints that do not exist yet.
-3. **Duplicate resolution for already-saved rows.** Duplicates are only
+2. **Duplicate resolution for already-saved rows.** Duplicates are only
    resolvable during import. A transaction saved as `DUPLICATE_PENDING` is
    invisible in the ledger — the status is in `lib/types/transaction.ts` but no
    component renders it — and the backend's
    `POST /api/v1/transactions/resolve-duplicate` and
    `DELETE /api/v1/transactions/{id}` endpoints have no UI at all.
-4. **Accounts and Settings screens.** Both are sidebar placeholders without
-   routes.
-5. **Transaction editing and deletion.** No UI, and the backend has no update
+3. **Accounts screen.** The first account can be created inline on `/upload`,
+   but the `Accounts` sidebar entry is still a placeholder: there is no screen
+   to add a second account outside an import, rename, or delete accounts
+   (the backend has no update/delete endpoint either).
+4. **Transaction editing and deletion.** No UI, and the backend has no update
    endpoint either.
-6. **Server-side filtering and pagination.** `/transactions` fetches the latest
+5. **Server-side filtering and pagination.** `/transactions` fetches the latest
    100 records and filters them in the browser, so anything older is invisible
    and the backend's `startDate`/`endDate`/`accountId`/`categoryId`/`type`/
    `status`/`page`/`size` query parameters go unused.
-7. **Category management.** No UI for creating or renaming categories, pending
+6. **Category management.** No UI for creating or renaming categories, pending
    backend endpoints.
+7. **Checking-account import.** The statement-type toggle offers it, but the
+   backend parser does not exist yet, so those uploads fail with `422`.
 
 ## Run locally
 
@@ -94,6 +97,10 @@ Start the backend from `../afinco_backend`, then start this frontend independent
 ```shell
 docker compose up --build -d
 ```
+
+The image build sets `NEXT_OUTPUT=standalone`, which switches `next.config.mjs`
+to the standalone server the runtime stage copies. Local `npm run build` and
+`npm start` use the regular output, so `next start` runs without warnings.
 
 The frontend container uses `http://host.docker.internal:8080/api/v1` to reach
 the separately managed backend container through the published backend port.
@@ -155,9 +162,11 @@ Payment rows retain their positive amount in the batch payload but reduce the
 displayed import total.
 
 Account and category options come from `GET /api/v1/accounts` and
-`GET /api/v1/categories`. Accounts have no backend seed or create endpoint yet,
-so on a fresh database the review screen explains that reviewed rows cannot be
-saved until an account row exists rather than failing at submit time.
+`GET /api/v1/categories`. Accounts have no backend seed, so on a fresh database
+the save bar shows an inline **Create account** form (bank name pre-filled from
+the parsed statement, last four digits, currency defaulting to `CAD`). It calls
+`POST /api/v1/accounts`, then selects the new account as the destination so the
+batch can be saved immediately.
 
 Row identity uses the parsed row's position, not its signature: repeated rows in
 one statement share a signature, so keying on it alone would collapse them.
@@ -166,4 +175,5 @@ one statement share a signature, so keying on it alone would collapse them.
 
 `AppShell` renders the sidebar on desktop and a scrollable section-tab row on
 mobile. Routes pass a `current` label to mark the active entry, which keeps the
-shell a server component. Overview and Accounts are placeholders without routes.
+shell a server component. The desktop sidebar is sticky, so **Sign out** stays
+visible on long ledgers. Overview and Accounts are placeholders without routes.

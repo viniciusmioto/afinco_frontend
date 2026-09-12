@@ -1,4 +1,4 @@
-import { getCurrentUser, login, logout } from "@/lib/api/auth";
+import { getSession, login, logout } from "@/lib/api/auth";
 
 const mockedFetch = jest.fn();
 global.fetch = mockedFetch as unknown as typeof fetch;
@@ -33,12 +33,14 @@ describe("authentication API", () => {
     );
   });
 
-  it("loads the current session without a CSRF header", async () => {
-    mockedFetch.mockResolvedValue(jsonResponse({ id: 1, email: "test@test.com" }));
+  it("probes the current session without a CSRF header", async () => {
+    const session = { authenticated: true, user: { id: 1, email: "test@test.com" } };
+    mockedFetch.mockResolvedValue(jsonResponse(session));
 
-    await getCurrentUser();
+    await expect(getSession()).resolves.toEqual(session);
 
-    const init = mockedFetch.mock.calls[0][1];
+    const [url, init] = mockedFetch.mock.calls[0];
+    expect(url).toBe("/api/v1/auth/session");
     expect(init.headers).not.toHaveProperty("X-XSRF-TOKEN");
   });
 
