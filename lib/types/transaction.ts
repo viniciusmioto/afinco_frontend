@@ -1,5 +1,6 @@
 export type TransactionType = "CREDIT" | "DEBIT";
 export type TransactionStatus = "CONFIRMED" | "DUPLICATE_PENDING";
+export type ExpenseType = "PAYMENT" | "FIXED" | "VARIABLE" | "OCCASIONAL";
 
 export interface Account {
   id: number;
@@ -11,6 +12,7 @@ export interface Account {
 export interface Category {
   id: number;
   name: string;
+  expenseType: ExpenseType;
   colorCode: string;
 }
 

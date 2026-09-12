@@ -5,7 +5,7 @@ export const transactions: Transaction[] = [
   {
     id: 1,
     account: { id: 4, bankName: "TD Bank", accountNumberLast4: "2048", currency: "CAD" },
-    category: { id: 2, name: "Groceries", colorCode: "#2563EB" },
+    category: { id: 2, name: "Groceries", expenseType: "VARIABLE", colorCode: "#2563EB" },
     date: "2026-09-11",
     amount: 42.35,
     type: "CREDIT",
@@ -18,7 +18,7 @@ export const transactions: Transaction[] = [
   {
     id: 2,
     account: { id: 4, bankName: "TD Bank", accountNumberLast4: "2048", currency: "CAD" },
-    category: { id: 7, name: "Income", colorCode: "#16A34A" },
+    category: { id: 9, name: "Occasional", expenseType: "OCCASIONAL", colorCode: "#EC4899" },
     date: "2026-09-03",
     amount: 2500,
     type: "DEBIT",
@@ -31,9 +31,10 @@ export const transactions: Transaction[] = [
 ];
 
 export const categories: Category[] = [
-  { id: 2, name: "Groceries", colorCode: "#2563EB" },
-  { id: 5, name: "Transportation", colorCode: "#0D9488" },
-  { id: 9, name: "Uncategorized", colorCode: "#6B7280" },
+  { id: 2, name: "Groceries", expenseType: "VARIABLE", colorCode: "#2563EB" },
+  { id: 5, name: "Transport", expenseType: "FIXED", colorCode: "#0EA5E9" },
+  { id: 9, name: "Occasional", expenseType: "OCCASIONAL", colorCode: "#EC4899" },
+  { id: 10, name: "Payment", expenseType: "PAYMENT", colorCode: "#10B981" },
 ];
 
 export const accounts: Account[] = [
@@ -51,6 +52,8 @@ export const parsedTransactions: ParsedTransaction[] = [
     hashSignature: "a".repeat(64),
     status: "CONFIRMED",
     duplicate: false,
+    expenseType: "OCCASIONAL",
+    categoryName: "Occasional",
   },
   {
     date: "2026-09-09",
@@ -61,6 +64,8 @@ export const parsedTransactions: ParsedTransaction[] = [
     hashSignature: "c".repeat(64),
     status: "DUPLICATE_PENDING",
     duplicate: true,
+    expenseType: "FIXED",
+    categoryName: "Transport",
   },
   {
     date: "2026-09-11",
@@ -71,6 +76,8 @@ export const parsedTransactions: ParsedTransaction[] = [
     hashSignature: "a".repeat(64),
     status: "DUPLICATE_PENDING",
     duplicate: true,
+    expenseType: "OCCASIONAL",
+    categoryName: "Occasional",
   },
 ];
 

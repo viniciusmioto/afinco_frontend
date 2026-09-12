@@ -11,11 +11,11 @@ import {
 import { categories, parsedTransactions } from "@/test/fixtures";
 
 describe("defaultCategoryId", () => {
-  it("prefers the seeded Uncategorized fallback", () => {
+  it("prefers the seeded Occasional fallback", () => {
     expect(defaultCategoryId(categories)).toBe("9");
   });
 
-  it("falls back to the first category when Uncategorized is absent", () => {
+  it("falls back to the first category when Occasional is absent", () => {
     expect(defaultCategoryId(categories.slice(0, 2))).toBe("2");
   });
 
@@ -29,7 +29,13 @@ describe("buildReviewRows", () => {
     const rows = buildReviewRows(parsedTransactions, categories);
 
     expect(rows.map((row) => row.included)).toEqual([true, false, false]);
-    expect(rows.every((row) => row.categoryId === "9")).toBe(true);
+    expect(rows.map((row) => row.categoryId)).toEqual(["9", "5", "9"]);
+  });
+
+  it("falls back to Occasional when a suggested category is unavailable", () => {
+    const parsed = [{ ...parsedTransactions[0], categoryName: "Missing category" }];
+
+    expect(buildReviewRows(parsed, categories)[0].categoryId).toBe("9");
   });
 
   it("gives repeated rows distinct keys even though they share a signature", () => {
@@ -73,10 +79,10 @@ describe("duplicate toggle state", () => {
 describe("setRowCategory", () => {
   it("overrides one row's category", () => {
     const rows = buildReviewRows(parsedTransactions, categories);
-    const updated = setRowCategory(rows, rows[0].id, "5");
+    const updated = setRowCategory(rows, rows[0].id, "2");
 
-    expect(updated[0].categoryId).toBe("5");
-    expect(updated[1].categoryId).toBe("9");
+    expect(updated[0].categoryId).toBe("2");
+    expect(updated[1].categoryId).toBe("5");
   });
 });
 
@@ -103,6 +109,20 @@ describe("summarize", () => {
     expect(summary.resolvedDuplicateCount).toBe(2);
     expect(summary.unresolvedDuplicateCount).toBe(0);
     expect(summary.includedTotal).toBeCloseTo(103.2);
+  });
+
+  it("subtracts payments from the net import total while keeping their stored amount positive", () => {
+    const payment = {
+      ...parsedTransactions[0],
+      amount: 25,
+      description: "PAYMENT - THANK YOU",
+      expenseType: "PAYMENT" as const,
+      categoryName: "Payment",
+    };
+    const rows = buildReviewRows([parsedTransactions[0], payment], categories);
+
+    expect(summarize(rows).includedTotal).toBe(17.35);
+    expect(toBatchInput(4, rows).transactions[1]).toMatchObject({ amount: 25, categoryId: 10 });
   });
 });
 
@@ -132,7 +152,7 @@ describe("toBatchInput", () => {
 
     expect(payload.transactions).toHaveLength(2);
     expect(payload.transactions[1]).toEqual({
-      categoryId: 9,
+      categoryId: 5,
       date: "2026-09-09",
       amount: 18.5,
       type: "CREDIT",

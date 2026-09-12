@@ -2,7 +2,12 @@
 
 import { AlertCircle, ArrowDownLeft, ArrowUpRight, Plus, ReceiptText, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createTransaction, getTransactions } from "@/lib/api/transactions";
+import {
+  createTransaction,
+  getAccounts,
+  getCategories,
+  getTransactions,
+} from "@/lib/api/transactions";
 import { formatCurrency } from "@/lib/formatters";
 import type {
   Account,
@@ -17,12 +22,10 @@ import { TransactionList } from "./transaction-list";
 
 const initialFilters: TransactionFilters = { search: "", categoryId: "", startDate: "", endDate: "" };
 
-function uniqueById<T extends { id: number }>(items: T[]) {
-  return Array.from(new Map(items.map((item) => [item.id, item])).values());
-}
-
 export function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [totalElements, setTotalElements] = useState(0);
   const [filters, setFilters] = useState(initialFilters);
   const [loading, setLoading] = useState(true);
@@ -31,13 +34,19 @@ export function TransactionsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const loadTransactions = useCallback(async (signal?: AbortSignal) => {
+  const loadPageData = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError(null);
     try {
-      const response = await getTransactions(signal);
+      const [response, loadedAccounts, loadedCategories] = await Promise.all([
+        getTransactions(signal),
+        getAccounts(signal),
+        getCategories(signal),
+      ]);
       setTransactions(response.content);
       setTotalElements(response.totalElements);
+      setAccounts(loadedAccounts);
+      setCategories(loadedCategories);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setLoadError(error instanceof Error ? error.message : "Transactions could not be loaded");
@@ -48,18 +57,9 @@ export function TransactionsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadTransactions(controller.signal);
+    void loadPageData(controller.signal);
     return () => controller.abort();
-  }, [loadTransactions]);
-
-  const categories = useMemo(
-    () => uniqueById(transactions.map((transaction) => transaction.category)).sort((a, b) => a.name.localeCompare(b.name)),
-    [transactions],
-  );
-  const accounts = useMemo(
-    () => uniqueById(transactions.map((transaction) => transaction.account)).sort((a, b) => a.bankName.localeCompare(b.bankName)),
-    [transactions],
-  );
+  }, [loadPageData]);
 
   const visibleTransactions = useMemo(() => {
     const query = filters.search.trim().toLocaleLowerCase();
@@ -73,7 +73,11 @@ export function TransactionsPage() {
     });
   }, [transactions, filters]);
 
-  const totalAmount = visibleTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+  const totalAmount = visibleTransactions.reduce(
+    (sum, transaction) =>
+      sum + (transaction.category.expenseType === "PAYMENT" ? -transaction.amount : transaction.amount),
+    0,
+  );
   const creditCount = visibleTransactions.filter((transaction) => transaction.type === "CREDIT").length;
   const debitCount = visibleTransactions.length - creditCount;
 
@@ -83,7 +87,7 @@ export function TransactionsPage() {
     try {
       await createTransaction(input);
       setModalOpen(false);
-      await loadTransactions();
+      await loadPageData();
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "The transaction could not be saved");
     } finally {
@@ -112,7 +116,7 @@ export function TransactionsPage() {
       </div>
 
       <section aria-label="Transaction summary" className="mt-7 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <SummaryCard icon={ReceiptText} label="Visible activity" value={formatCurrency(totalAmount)} />
+        <SummaryCard icon={ReceiptText} label="Visible net" value={formatCurrency(totalAmount)} />
         <SummaryCard icon={ArrowUpRight} label="Credits" value={creditCount.toString()} />
         <SummaryCard icon={ArrowDownLeft} label="Debits" value={debitCount.toString()} />
         <SummaryCard icon={ReceiptText} label="Total records" value={totalElements.toLocaleString("en-CA")} />
@@ -126,7 +130,7 @@ export function TransactionsPage() {
         {loading ? (
           <LoadingState />
         ) : loadError ? (
-          <ErrorState message={loadError} onRetry={() => void loadTransactions()} />
+          <ErrorState message={loadError} onRetry={() => void loadPageData()} />
         ) : (
           <>
             <div className="mb-3 flex items-center justify-between px-1 text-xs font-medium text-slate-500">
@@ -139,8 +143,8 @@ export function TransactionsPage() {
       </div>
 
       <ManualEntryModal
-        accounts={accounts as Account[]}
-        categories={categories as Category[]}
+        accounts={accounts}
+        categories={categories}
         error={submitError}
         onClose={() => setModalOpen(false)}
         onSubmit={handleCreate}

@@ -8,7 +8,7 @@ App Router, React 19, TypeScript, Tailwind CSS, and Lucide icons.
 An authenticated login flow and two finance screens are built and tested:
 `/transactions` (ledger with local search and filters, manual entry) and
 `/upload` (PDF statement import with duplicate resolution and batch save).
-89 tests pass across 13 suites.
+94 tests pass across 13 suites.
 
 Requires the [afinco_backend](https://github.com/viniciusmioto/afinco_backend)
 API. The backend owns authentication and finance data; this application keeps
@@ -63,18 +63,13 @@ Ordered roughly by how much each one blocks real use.
    `DELETE /api/v1/transactions/{id}` endpoints have no UI at all.
 4. **Accounts and Settings screens.** Both are sidebar placeholders without
    routes.
-5. **Stale reference-data source on `/transactions`.** That screen still derives
-   its account and category dropdowns from whichever transactions happened to
-   load, predating the `GET /api/v1/accounts` and `GET /api/v1/categories`
-   endpoints that `/upload` uses. Two sources of truth for the same data; the
-   filter dropdown can therefore omit categories that exist in the database.
-6. **Transaction editing and deletion.** No UI, and the backend has no update
+5. **Transaction editing and deletion.** No UI, and the backend has no update
    endpoint either.
-7. **Server-side filtering and pagination.** `/transactions` fetches the latest
+6. **Server-side filtering and pagination.** `/transactions` fetches the latest
    100 records and filters them in the browser, so anything older is invisible
    and the backend's `startDate`/`endDate`/`accountId`/`categoryId`/`type`/
    `status`/`page`/`size` query parameters go unused.
-8. **Category management.** No UI for creating or renaming categories, pending
+7. **Category management.** No UI for creating or renaming categories, pending
    backend endpoints.
 
 ## Run locally
@@ -114,19 +109,21 @@ npm run build
 ```
 
 Jest covers the statement import with mocked API responses: upload payload and
-multipart construction, duplicate toggle state, category overrides, batch
-payload generation, and the error paths for a rejected file, a failed parse, and
-a failed save. Pure review logic lives in `lib/statements/` so payload
-generation is unit-tested apart from the React tree.
+multipart construction, automatic category selection, payment net totals,
+duplicate toggle state, category overrides, batch payload generation, and the
+error paths for a rejected file, a failed parse, and a failed save. Pure review
+logic lives in `lib/statements/` so payload generation is unit-tested apart
+from the React tree.
 
 ## Screens
 
 ### `/transactions`
 
 Loads up to the latest 100 backend records and applies search, category, and
-date filters locally. Account and category choices in the manual-entry modal are
-still derived from the returned transactions, so with no existing transactions
-the modal disables submission instead of guessing database IDs.
+date filters locally. Account and category choices come from the backend's
+reference endpoints, so the manual-entry modal works before the first
+transaction as soon as an account exists. Payment categories reduce the
+`Visible net` summary while all stored row amounts remain positive.
 
 ### `/upload`
 
@@ -146,13 +143,16 @@ possible duplicates carry amber accents, a "Possible duplicate" badge, and
 inline **Import anyway** / **Skip** actions; banner-level actions import or skip
 every flagged row at once. Flagged rows start skipped so an accidental save can
 never double-count spending, and clean rows start included with an import
-checkbox. Every row exposes a category dropdown, pre-selected to `Uncategorized`
-when that category is seeded.
+checkbox. Every row exposes a category dropdown pre-selected from the backend's
+categorization suggestion. An unknown suggestion safely falls back to
+`Occasional`.
 
 **Save** sends the finalized rows to `POST /api/v1/transactions/batch`. Skipped
 rows are dropped from the payload entirely, and a kept duplicate is sent with
 `forceDuplicate: true` so the API confirms it rather than re-flagging it. Saving
 is blocked until a destination account is selected and at least one row is kept.
+Payment rows retain their positive amount in the batch payload but reduce the
+displayed import total.
 
 Account and category options come from `GET /api/v1/accounts` and
 `GET /api/v1/categories`. Accounts have no backend seed or create endpoint yet,

@@ -75,6 +75,8 @@ describe("StatementUploadPage", () => {
 
     expect(screen.getByTestId("duplicate-banner")).toHaveTextContent("2 possible duplicates found");
     expect(screen.getByRole("button", { name: "Save 1 transaction" })).toBeEnabled();
+    expect(within(desktopRow(CLEAN_ROW)).getByRole("combobox")).toHaveValue("9");
+    expect(within(desktopRow(DUPLICATE_ROW)).getByRole("combobox")).toHaveValue("5");
   });
 
   it("surfaces a parsing failure and keeps the dropzone visible", async () => {

@@ -15,12 +15,12 @@ import { createTransactionBatch, getAccounts, getCategories } from "@/lib/api/tr
 import { formatCurrency } from "@/lib/formatters";
 import {
   buildReviewRows,
-  defaultCategoryId,
   hasCompleteCategories,
   setAllDuplicatesIncluded,
   setRowCategory,
   setRowIncluded,
   summarize,
+  suggestedCategoryId,
   toBatchInput,
   type ReviewRow,
 } from "@/lib/statements/review";
@@ -78,10 +78,11 @@ export function StatementUploadPage() {
   // A fast upload can finish before the category list resolves; backfill any row left without one.
   useEffect(() => {
     if (categories.length === 0) return;
-    const fallback = defaultCategoryId(categories);
     setRows((current) =>
       current.some((row) => !row.categoryId)
-        ? current.map((row) => (row.categoryId ? row : { ...row, categoryId: fallback }))
+        ? current.map((row) =>
+            row.categoryId ? row : { ...row, categoryId: suggestedCategoryId(row.parsed, categories) },
+          )
         : current,
     );
   }, [categories]);

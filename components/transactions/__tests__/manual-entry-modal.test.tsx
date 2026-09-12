@@ -26,6 +26,14 @@ describe("ManualEntryModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("uses Occasional as the safe default category", () => {
+    render(
+      <ManualEntryModal accounts={accounts} categories={categories} onClose={jest.fn()} onSubmit={jest.fn()} open />,
+    );
+
+    expect(screen.getByLabelText("Category")).toHaveValue("9");
+  });
+
   it("submits a valid manual credit entry", async () => {
     const user = userEvent.setup();
     const onSubmit = jest.fn().mockResolvedValue(undefined);

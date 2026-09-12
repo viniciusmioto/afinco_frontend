@@ -5,7 +5,7 @@ import type {
 } from "@/lib/types/statement";
 import type { Category } from "@/lib/types/transaction";
 
-const FALLBACK_CATEGORY_NAME = "Uncategorized";
+const FALLBACK_CATEGORY_NAME = "Occasional";
 
 /** One reviewable statement row: the parsed data plus the reviewer's category and keep/skip decision. */
 export interface ReviewRow {
@@ -26,10 +26,16 @@ export interface ReviewSummary {
   includedTotal: number;
 }
 
-/** Picks the safest pre-selected category: `Uncategorized` when seeded, otherwise the first option. */
+/** Picks the seeded catch-all category when available, otherwise the first option. */
 export function defaultCategoryId(categories: Category[]): string {
   const fallback = categories.find((category) => category.name === FALLBACK_CATEGORY_NAME) ?? categories[0];
   return fallback ? String(fallback.id) : "";
+}
+
+/** Resolves the backend suggestion by name and falls back safely if reference data is stale. */
+export function suggestedCategoryId(transaction: ParsedTransaction, categories: Category[]): string {
+  const suggested = categories.find((category) => category.name === transaction.categoryName);
+  return suggested ? String(suggested.id) : defaultCategoryId(categories);
 }
 
 /**
@@ -37,11 +43,10 @@ export function defaultCategoryId(categories: Category[]): string {
  * double-count spending; the reviewer opts in per row with "Import anyway".
  */
 export function buildReviewRows(parsed: ParsedTransaction[], categories: Category[]): ReviewRow[] {
-  const categoryId = defaultCategoryId(categories);
   return parsed.map((transaction, index) => ({
     id: `${index}-${transaction.hashSignature}`,
     parsed: transaction,
-    categoryId,
+    categoryId: suggestedCategoryId(transaction, categories),
     included: !transaction.duplicate,
   }));
 }
@@ -69,7 +74,10 @@ export function summarize(rows: ReviewRow[]): ReviewSummary {
     duplicateCount: duplicates.length,
     resolvedDuplicateCount,
     unresolvedDuplicateCount: duplicates.length - resolvedDuplicateCount,
-    includedTotal: included.reduce((sum, row) => sum + row.parsed.amount, 0),
+    includedTotal: included.reduce(
+      (sum, row) => sum + (row.parsed.expenseType === "PAYMENT" ? -row.parsed.amount : row.parsed.amount),
+      0,
+    ),
   };
 }
 

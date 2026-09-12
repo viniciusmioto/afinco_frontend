@@ -100,8 +100,9 @@ describe("ParsedTransactionReview", () => {
 
     expect(within(cleanRow).getAllByRole("option").map((option) => option.textContent)).toEqual([
       "Groceries",
-      "Transportation",
-      "Uncategorized",
+      "Transport",
+      "Occasional",
+      "Payment",
     ]);
   });
 

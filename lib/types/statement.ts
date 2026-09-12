@@ -1,4 +1,4 @@
-import type { TransactionStatus, TransactionType } from "@/lib/types/transaction";
+import type { ExpenseType, TransactionStatus, TransactionType } from "@/lib/types/transaction";
 
 /** Mirrors the backend `StatementType` request parameter. */
 export type StatementType = "CREDIT_CARD" | "CHECKING_ACCOUNT";
@@ -13,6 +13,8 @@ export interface ParsedTransaction {
   hashSignature: string;
   status: TransactionStatus;
   duplicate: boolean;
+  expenseType: ExpenseType;
+  categoryName: string;
 }
 
 export interface StatementUploadResult {
