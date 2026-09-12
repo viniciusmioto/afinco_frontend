@@ -1,0 +1,27 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: afinco-frontend:local
+    container_name: afinco-frontend
+    restart: unless-stopped
+    environment:
+      API_PROXY_TARGET: http://host.docker.internal:8080/api/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3000:3000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=32m,mode=1777
+    mem_limit: 384m
+    cpus: 0.75
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:3000/transactions"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
