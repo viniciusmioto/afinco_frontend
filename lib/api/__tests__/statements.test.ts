@@ -9,7 +9,14 @@ function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body } as Response;
 }
 
-afterEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  document.cookie = "XSRF-TOKEN=test-csrf-token; path=/";
+});
+
+afterEach(() => {
+  jest.clearAllMocks();
+  document.cookie = "XSRF-TOKEN=; Max-Age=0; path=/";
+});
 
 describe("uploadStatement", () => {
   it("posts multipart form data to the upload endpoint", async () => {
@@ -21,6 +28,7 @@ describe("uploadStatement", () => {
     expect(url).toBe("/api/v1/statements/upload");
     expect(init.method).toBe("POST");
     expect(init.body).toBeInstanceOf(FormData);
+    expect(init.headers["X-XSRF-TOKEN"]).toBe("test-csrf-token");
     expect((init.body as FormData).get("statementType")).toBe("CREDIT_CARD");
     expect((init.body as FormData).get("file")).toBeInstanceOf(File);
   });

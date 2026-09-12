@@ -11,7 +11,7 @@ async function proxy(request: NextRequest, context: RouteContext) {
   target.search = request.nextUrl.search;
 
   const headers = new Headers();
-  for (const name of ["accept", "content-type"]) {
+  for (const name of ["accept", "content-type", "cookie", "x-xsrf-token"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
@@ -24,10 +24,13 @@ async function proxy(request: NextRequest, context: RouteContext) {
       cache: "no-store",
     });
     const responseHeaders = new Headers();
-    const contentType = response.headers.get("content-type");
-    if (contentType) responseHeaders.set("content-type", contentType);
-    const location = response.headers.get("location");
-    if (location) responseHeaders.set("location", location);
+    for (const name of ["content-type", "location", "retry-after"]) {
+      const value = response.headers.get(name);
+      if (value) responseHeaders.set(name, value);
+    }
+    for (const cookie of response.headers.getSetCookie()) {
+      responseHeaders.append("set-cookie", cookie);
+    }
     responseHeaders.set("cache-control", "no-store");
 
     return new Response(response.body, {

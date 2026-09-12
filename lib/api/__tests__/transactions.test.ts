@@ -8,7 +8,14 @@ function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body } as Response;
 }
 
-afterEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  document.cookie = "XSRF-TOKEN=test-csrf-token; path=/";
+});
+
+afterEach(() => {
+  jest.clearAllMocks();
+  document.cookie = "XSRF-TOKEN=; Max-Age=0; path=/";
+});
 
 describe("createTransactionBatch", () => {
   const payload = {
@@ -38,6 +45,7 @@ describe("createTransactionBatch", () => {
     expect(url).toBe("/api/v1/transactions/batch");
     expect(init.method).toBe("POST");
     expect(init.headers["Content-Type"]).toBe("application/json");
+    expect(init.headers["X-XSRF-TOKEN"]).toBe("test-csrf-token");
     expect(JSON.parse(init.body)).toEqual(payload);
   });
 

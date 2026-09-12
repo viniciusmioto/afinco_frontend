@@ -5,13 +5,39 @@ App Router, React 19, TypeScript, Tailwind CSS, and Lucide icons.
 
 ## Project status
 
-Two screens are built and tested: `/transactions` (ledger with local search and
-filters, manual entry) and `/upload` (PDF statement import with duplicate
-resolution and batch save). 82 tests pass across 11 suites.
+An authenticated login flow and two finance screens are built and tested:
+`/transactions` (ledger with local search and filters, manual entry) and
+`/upload` (PDF statement import with duplicate resolution and batch save).
+89 tests pass across 13 suites.
 
 Requires the [afinco_backend](https://github.com/viniciusmioto/afinco_backend)
-API, which has its own list of gaps — most importantly no way to create an
-account, which blocks saving imports on a fresh database.
+API. The backend owns authentication and finance data; this application keeps
+the session in an HTTP-only same-origin cookie through its API proxy.
+
+## Sign in
+
+Open `http://localhost:3000/login` and use the temporary local account:
+
+```text
+Email: test@test.com
+Password: 123@Test
+```
+
+Protected routes perform a quick cookie-presence redirect and then verify the
+session with the backend before rendering finance data. The middleware check is
+only a UX optimization; backend authorization remains the security boundary.
+Unsafe API calls obtain a CSRF cookie and echo its token in `X-XSRF-TOKEN`.
+Logout invalidates the backend session.
+
+The proxy deliberately forwards only the required content, cookie, and CSRF
+headers and relays all backend `Set-Cookie` headers. Auth responses are never
+cached. Browser responses include CSP, frame denial, MIME-sniffing protection,
+a no-referrer policy, and a restricted permissions policy.
+
+The test credential is documented and must be replaced before exposing Afinco
+outside a trusted LAN. When HTTPS is terminated by a homelab reverse proxy, set
+`AFINCO_SECURE_COOKIES=true` on the backend. The backend's
+`docs/authentication.md` contains the complete security and deployment model.
 
 ### Not implemented yet
 
@@ -60,7 +86,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000/transactions` for the ledger or
+Open `http://localhost:3000/login`, then continue to `/transactions` for the ledger or
 `http://localhost:3000/upload` to import a statement. Browser client calls are sent to the
 same-origin `/api/v1` route. The Next.js server proxies them to
 `API_PROXY_TARGET`, which defaults to `http://localhost:8080/api/v1`. This avoids
