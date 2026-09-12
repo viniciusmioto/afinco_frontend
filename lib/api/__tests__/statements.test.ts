@@ -1,6 +1,6 @@
-import { uploadStatement } from "@/lib/api/statements";
+import { getStatements, importStatement, uploadStatement } from "@/lib/api/statements";
 import { ApiError } from "@/lib/api/client";
-import { pdfFile, uploadResult } from "@/test/fixtures";
+import { pdfFile, statements, uploadResult } from "@/test/fixtures";
 
 const mockedFetch = jest.fn();
 global.fetch = mockedFetch as unknown as typeof fetch;
@@ -61,5 +61,33 @@ describe("uploadStatement", () => {
     } as unknown as Response);
 
     await expect(uploadStatement(pdfFile(), "CREDIT_CARD")).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("statement persistence", () => {
+  it("lists imported statements", async () => {
+    mockedFetch.mockResolvedValue(jsonResponse(statements));
+
+    await expect(getStatements()).resolves.toEqual(statements);
+    expect(mockedFetch.mock.calls[0][0]).toBe("/api/v1/statements");
+  });
+
+  it("imports a reviewed statement as CSRF-protected JSON", async () => {
+    const input = {
+      accountId: 4,
+      statementType: "CREDIT_CARD" as const,
+      periodStart: "2026-08-14",
+      periodEnd: "2026-09-13",
+      transactions: [{ categoryId: 9, date: "2026-09-11", amount: 42.35, description: "Harbour Market", forceDuplicate: false }],
+    };
+    mockedFetch.mockResolvedValue(jsonResponse({ statement: statements[0], created: true, savedCount: 1, duplicateCount: 0 }, 201));
+
+    await expect(importStatement(input)).resolves.toMatchObject({ created: true, savedCount: 1 });
+
+    const [url, init] = mockedFetch.mock.calls[0];
+    expect(url).toBe("/api/v1/statements");
+    expect(init.method).toBe("POST");
+    expect(init.headers["X-XSRF-TOKEN"]).toBe("test-csrf-token");
+    expect(JSON.parse(init.body)).toEqual(input);
   });
 });

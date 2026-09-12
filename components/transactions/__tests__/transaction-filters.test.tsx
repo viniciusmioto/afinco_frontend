@@ -5,7 +5,7 @@ import { TransactionFiltersBar } from "@/components/transactions/transaction-fil
 import type { TransactionFilters } from "@/lib/types/transaction";
 import { transactions } from "@/test/fixtures";
 
-const initial: TransactionFilters = { search: "", categoryId: "", startDate: "", endDate: "" };
+const initial: TransactionFilters = { search: "", categoryId: "" };
 
 function FilterHarness() {
   const [filters, setFilters] = useState(initial);
@@ -22,19 +22,16 @@ function FilterHarness() {
 }
 
 describe("TransactionFiltersBar", () => {
-  it("updates search, category, and date filters", async () => {
+  it("updates search and category filters without offering a date range", async () => {
     const user = userEvent.setup();
     render(<FilterHarness />);
 
     await user.type(screen.getByRole("searchbox", { name: "Search transactions" }), "market");
     await user.selectOptions(screen.getByRole("combobox", { name: "Filter by category" }), "2");
-    await user.type(screen.getByLabelText("Start date"), "2026-09-01");
-    await user.type(screen.getByLabelText("End date"), "2026-09-30");
 
     expect(screen.getByLabelText("Current filters")).toHaveTextContent('"search":"market"');
     expect(screen.getByLabelText("Current filters")).toHaveTextContent('"categoryId":"2"');
-    expect(screen.getByLabelText("Current filters")).toHaveTextContent('"startDate":"2026-09-01"');
-    expect(screen.getByLabelText("Current filters")).toHaveTextContent('"endDate":"2026-09-30"');
+    expect(screen.queryByLabelText("Start date")).not.toBeInTheDocument();
   });
 
   it("clears active filters", async () => {

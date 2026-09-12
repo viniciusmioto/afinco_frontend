@@ -1,7 +1,8 @@
 import type {
+  ImportedTransactionInput,
   ParsedTransaction,
-  TransactionBatchInput,
-  TransactionBatchItem,
+  StatementImportInput,
+  StatementUploadResult,
 } from "@/lib/types/statement";
 import type { Category } from "@/lib/types/transaction";
 
@@ -14,6 +15,10 @@ export interface ReviewRow {
   parsed: ParsedTransaction;
   categoryId: string;
   included: boolean;
+  /** Flagged by the backend (already saved or repeated in this statement) or found in another queued file. */
+  duplicate: boolean;
+  /** File name of another statement in this import that contains the same transaction. */
+  duplicateOf: string | null;
 }
 
 export interface ReviewSummary {
@@ -40,15 +45,26 @@ export function suggestedCategoryId(transaction: ParsedTransaction, categories: 
 
 /**
  * Seeds the review table. Flagged duplicates start skipped so an accidental bulk save can never
- * double-count spending; the reviewer opts in per row with "Import anyway".
+ * double-count spending; the reviewer opts in per row with "Import anyway". `otherFiles` maps the
+ * signatures of statements already parsed in this import to their file names.
  */
-export function buildReviewRows(parsed: ParsedTransaction[], categories: Category[]): ReviewRow[] {
-  return parsed.map((transaction, index) => ({
-    id: `${index}-${transaction.hashSignature}`,
-    parsed: transaction,
-    categoryId: suggestedCategoryId(transaction, categories),
-    included: !transaction.duplicate,
-  }));
+export function buildReviewRows(
+  parsed: ParsedTransaction[],
+  categories: Category[],
+  otherFiles: ReadonlyMap<string, string> = new Map(),
+): ReviewRow[] {
+  return parsed.map((transaction, index) => {
+    const duplicateOf = transaction.duplicate ? null : otherFiles.get(transaction.hashSignature) ?? null;
+    const duplicate = transaction.duplicate || duplicateOf !== null;
+    return {
+      id: `${index}-${transaction.hashSignature}`,
+      parsed: transaction,
+      categoryId: suggestedCategoryId(transaction, categories),
+      included: !duplicate,
+      duplicate,
+      duplicateOf,
+    };
+  });
 }
 
 export function setRowIncluded(rows: ReviewRow[], id: string, included: boolean): ReviewRow[] {
@@ -60,12 +76,20 @@ export function setRowCategory(rows: ReviewRow[], id: string, categoryId: string
 }
 
 export function setAllDuplicatesIncluded(rows: ReviewRow[], included: boolean): ReviewRow[] {
-  return rows.map((row) => (row.parsed.duplicate ? { ...row, included } : row));
+  return rows.map((row) => (row.duplicate ? { ...row, included } : row));
+}
+
+/** Gives rows that were built before categories loaded their suggested category. */
+export function backfillCategories(rows: ReviewRow[], categories: Category[]): ReviewRow[] {
+  if (categories.length === 0 || rows.every((row) => row.categoryId)) return rows;
+  return rows.map((row) =>
+    row.categoryId ? row : { ...row, categoryId: suggestedCategoryId(row.parsed, categories) },
+  );
 }
 
 export function summarize(rows: ReviewRow[]): ReviewSummary {
   const included = rows.filter((row) => row.included);
-  const duplicates = rows.filter((row) => row.parsed.duplicate);
+  const duplicates = rows.filter((row) => row.duplicate);
   const resolvedDuplicateCount = duplicates.filter((row) => row.included).length;
   return {
     totalCount: rows.length,
@@ -82,29 +106,34 @@ export function summarize(rows: ReviewRow[]): ReviewSummary {
 }
 
 /**
- * Builds the `POST /api/v1/transactions/batch` payload. Skipped rows are dropped entirely, and a
- * kept duplicate carries `forceDuplicate` so the API confirms it instead of re-flagging it.
+ * Builds the `POST /api/v1/statements` payload. Skipped rows are dropped entirely, and a kept
+ * duplicate carries `forceDuplicate` so the API confirms it instead of re-flagging it.
  */
-export function toBatchInput(accountId: number, rows: ReviewRow[]): TransactionBatchInput {
+export function toImportInput(
+  accountId: number,
+  statement: Pick<StatementUploadResult, "statementType" | "periodStart" | "periodEnd">,
+  rows: ReviewRow[],
+): StatementImportInput {
   return {
     accountId,
-    transactions: rows.filter((row) => row.included).map(toBatchItem),
+    statementType: statement.statementType,
+    periodStart: statement.periodStart,
+    periodEnd: statement.periodEnd,
+    transactions: rows.filter((row) => row.included).map(toImportedTransaction),
   };
 }
 
-function toBatchItem(row: ReviewRow): TransactionBatchItem {
+function toImportedTransaction(row: ReviewRow): ImportedTransactionInput {
   return {
     categoryId: Number(row.categoryId),
     date: row.parsed.date,
     amount: row.parsed.amount,
-    type: row.parsed.type,
     description: row.parsed.description,
-    hashSignature: row.parsed.hashSignature,
-    forceDuplicate: row.parsed.duplicate,
+    forceDuplicate: row.duplicate,
   };
 }
 
-/** Every kept row needs a category before the batch can be submitted. */
+/** Every kept row needs a category before the statement can be submitted. */
 export function hasCompleteCategories(rows: ReviewRow[]): boolean {
   return rows.filter((row) => row.included).every((row) => Boolean(row.categoryId));
 }

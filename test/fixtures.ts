@@ -1,11 +1,12 @@
-import type { ParsedTransaction, StatementUploadResult } from "@/lib/types/statement";
-import type { Account, Category, Transaction } from "@/lib/types/transaction";
+import type { ParsedTransaction, Statement, StatementUploadResult } from "@/lib/types/statement";
+import type { Account, Category, Transaction, TransactionMonth } from "@/lib/types/transaction";
 
 export const transactions: Transaction[] = [
   {
     id: 1,
     account: { id: 4, bankName: "TD Bank", accountNumberLast4: "2048", currency: "CAD" },
     category: { id: 2, name: "Groceries", expenseType: "VARIABLE", colorCode: "#2563EB" },
+    statement: { id: 12, statementType: "CREDIT_CARD", periodStart: "2026-08-14", periodEnd: "2026-09-13" },
     date: "2026-09-11",
     amount: 42.35,
     type: "CREDIT",
@@ -19,6 +20,7 @@ export const transactions: Transaction[] = [
     id: 2,
     account: { id: 4, bankName: "TD Bank", accountNumberLast4: "2048", currency: "CAD" },
     category: { id: 9, name: "Occasional", expenseType: "OCCASIONAL", colorCode: "#EC4899" },
+    statement: null,
     date: "2026-09-03",
     amount: 2500,
     type: "DEBIT",
@@ -83,6 +85,9 @@ export const parsedTransactions: ParsedTransaction[] = [
 
 export const uploadResult: StatementUploadResult = {
   bankName: "TD Bank",
+  statementType: "CREDIT_CARD",
+  periodStart: "2026-08-14",
+  periodEnd: "2026-09-13",
   transactionCount: 3,
   duplicateCount: 2,
   total: 103.2,
@@ -94,3 +99,56 @@ export function pdfFile(name = "statement.pdf", size = 2048) {
   Object.defineProperty(file, "size", { value: size });
   return file;
 }
+
+/** Newest billing period first, as `GET /api/v1/statements` returns them. */
+export const statements: Statement[] = [
+  {
+    id: 12,
+    account: accounts[0],
+    statementType: "CREDIT_CARD",
+    periodStart: "2026-08-14",
+    periodEnd: "2026-09-13",
+    transactionCount: 2,
+    importedAt: "2026-09-14T12:00:00",
+  },
+  {
+    id: 11,
+    account: accounts[0],
+    statementType: "CREDIT_CARD",
+    periodStart: "2026-07-14",
+    periodEnd: "2026-08-13",
+    transactionCount: 44,
+    importedAt: "2026-09-14T12:00:00",
+  },
+];
+
+export const months: TransactionMonth[] = [
+  { month: "2026-09", transactionCount: 2 },
+  { month: "2026-08", transactionCount: 30 },
+  { month: "2026-07", transactionCount: 14 },
+];
+
+/** A clean one-row statement for the previous billing period. */
+export const julyUploadResult: StatementUploadResult = {
+  bankName: "TD Bank",
+  statementType: "CREDIT_CARD",
+  periodStart: "2026-07-14",
+  periodEnd: "2026-08-13",
+  transactionCount: 1,
+  duplicateCount: 0,
+  total: 64.56,
+  transactions: [
+    {
+      date: "2026-07-20",
+      amount: 64.56,
+      type: "CREDIT",
+      description: "WALMART.CA MISSISSAUGA",
+      bankName: "TD Bank",
+      hashSignature: "d".repeat(64),
+      status: "CONFIRMED",
+      duplicate: false,
+      expenseType: "VARIABLE",
+      categoryName: "Groceries",
+    },
+  ],
+};

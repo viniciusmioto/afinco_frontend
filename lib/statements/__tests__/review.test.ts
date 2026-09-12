@@ -6,9 +6,9 @@ import {
   setRowCategory,
   setRowIncluded,
   summarize,
-  toBatchInput,
+  toImportInput,
 } from "@/lib/statements/review";
-import { categories, parsedTransactions } from "@/test/fixtures";
+import { categories, parsedTransactions, uploadResult } from "@/test/fixtures";
 
 describe("defaultCategoryId", () => {
   it("prefers the seeded Occasional fallback", () => {
@@ -36,6 +36,19 @@ describe("buildReviewRows", () => {
     const parsed = [{ ...parsedTransactions[0], categoryName: "Missing category" }];
 
     expect(buildReviewRows(parsed, categories)[0].categoryId).toBe("9");
+  });
+
+  it("flags rows already present in another queued statement and names that file", () => {
+    const clean = [{ ...parsedTransactions[0], duplicate: false }];
+    const rows = buildReviewRows(clean, categories, new Map([["a".repeat(64), "august.pdf"]]));
+
+    expect(rows[0]).toMatchObject({ duplicate: true, duplicateOf: "august.pdf", included: false });
+  });
+
+  it("keeps the backend duplicate reason when a row is flagged both ways", () => {
+    const rows = buildReviewRows(parsedTransactions, categories, new Map([["c".repeat(64), "august.pdf"]]));
+
+    expect(rows[1]).toMatchObject({ duplicate: true, duplicateOf: null });
   });
 
   it("gives repeated rows distinct keys even though they share a signature", () => {
@@ -122,24 +135,25 @@ describe("summarize", () => {
     const rows = buildReviewRows([parsedTransactions[0], payment], categories);
 
     expect(summarize(rows).includedTotal).toBe(17.35);
-    expect(toBatchInput(4, rows).transactions[1]).toMatchObject({ amount: 25, categoryId: 10 });
+    expect(toImportInput(4, uploadResult, rows).transactions[1]).toMatchObject({ amount: 25, categoryId: 10 });
   });
 });
 
-describe("toBatchInput", () => {
-  it("drops skipped rows from the payload", () => {
+describe("toImportInput", () => {
+  it("sends the statement period with only the kept rows", () => {
     const rows = buildReviewRows(parsedTransactions, categories);
 
-    expect(toBatchInput(4, rows)).toEqual({
+    expect(toImportInput(4, uploadResult, rows)).toEqual({
       accountId: 4,
+      statementType: "CREDIT_CARD",
+      periodStart: "2026-08-14",
+      periodEnd: "2026-09-13",
       transactions: [
         {
           categoryId: 9,
           date: "2026-09-11",
           amount: 42.35,
-          type: "CREDIT",
           description: "Harbour Market",
-          hashSignature: "a".repeat(64),
           forceDuplicate: false,
         },
       ],
@@ -148,16 +162,14 @@ describe("toBatchInput", () => {
 
   it("marks an imported duplicate with forceDuplicate", () => {
     const rows = setRowIncluded(buildReviewRows(parsedTransactions, categories), `1-${"c".repeat(64)}`, true);
-    const payload = toBatchInput(4, rows);
+    const payload = toImportInput(4, uploadResult, rows);
 
     expect(payload.transactions).toHaveLength(2);
     expect(payload.transactions[1]).toEqual({
       categoryId: 5,
       date: "2026-09-09",
       amount: 18.5,
-      type: "CREDIT",
       description: "Transit Pass",
-      hashSignature: "c".repeat(64),
       forceDuplicate: true,
     });
   });
@@ -165,13 +177,13 @@ describe("toBatchInput", () => {
   it("sends the per-row category override rather than the default", () => {
     const rows = setRowCategory(buildReviewRows(parsedTransactions, categories), `0-${"a".repeat(64)}`, "5");
 
-    expect(toBatchInput(4, rows).transactions[0].categoryId).toBe(5);
+    expect(toImportInput(4, uploadResult, rows).transactions[0].categoryId).toBe(5);
   });
 
   it("produces an empty transaction list when everything is skipped", () => {
     const rows = buildReviewRows(parsedTransactions, categories).map((row) => ({ ...row, included: false }));
 
-    expect(toBatchInput(4, rows).transactions).toEqual([]);
+    expect(toImportInput(4, uploadResult, rows).transactions).toEqual([]);
   });
 });
 

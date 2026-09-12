@@ -1,5 +1,11 @@
-import { createAccount, createTransactionBatch, getAccounts, getCategories } from "@/lib/api/transactions";
-import { accounts, categories } from "@/test/fixtures";
+import {
+  createAccount,
+  getAccounts,
+  getCategories,
+  getTransactionMonths,
+  getTransactions,
+} from "@/lib/api/transactions";
+import { accounts, categories, months } from "@/test/fixtures";
 
 const mockedFetch = jest.fn();
 global.fetch = mockedFetch as unknown as typeof fetch;
@@ -17,44 +23,31 @@ afterEach(() => {
   document.cookie = "XSRF-TOKEN=; Max-Age=0; path=/";
 });
 
-describe("createTransactionBatch", () => {
-  const payload = {
-    accountId: 4,
-    transactions: [
-      {
-        categoryId: 9,
-        date: "2026-09-11",
-        amount: 42.35,
-        type: "CREDIT" as const,
-        description: "Harbour Market",
-        hashSignature: "a".repeat(64),
-        forceDuplicate: false,
-      },
-    ],
-  };
+describe("getTransactions", () => {
+  const page = { content: [], page: 0, size: 500, totalElements: 0, totalPages: 0, first: true, last: true };
 
-  it("posts the reviewed batch as JSON", async () => {
-    mockedFetch.mockResolvedValue(
-      jsonResponse({ savedCount: 1, duplicateCount: 0, transactions: [] }, 201),
-    );
+  it("requests one statement", async () => {
+    mockedFetch.mockResolvedValue(jsonResponse(page));
 
-    const result = await createTransactionBatch(payload);
+    await getTransactions({ view: "statement", statementId: 12 });
 
-    expect(result.savedCount).toBe(1);
-    const [url, init] = mockedFetch.mock.calls[0];
-    expect(url).toBe("/api/v1/transactions/batch");
-    expect(init.method).toBe("POST");
-    expect(init.headers["Content-Type"]).toBe("application/json");
-    expect(init.headers["X-XSRF-TOKEN"]).toBe("test-csrf-token");
-    expect(JSON.parse(init.body)).toEqual(payload);
+    expect(mockedFetch.mock.calls[0][0]).toBe("/api/v1/transactions?size=500&statementId=12");
   });
 
-  it("propagates a validation failure from the API", async () => {
-    mockedFetch.mockResolvedValue(
-      jsonResponse({ message: "Request validation failed", validationErrors: { accountId: "must not be null" } }, 400),
-    );
+  it("requests one calendar month through its inclusive date bounds", async () => {
+    mockedFetch.mockResolvedValue(jsonResponse(page));
 
-    await expect(createTransactionBatch(payload)).rejects.toThrow("Request validation failed");
+    await getTransactions({ view: "month", month: "2026-02" });
+
+    expect(mockedFetch.mock.calls[0][0])
+      .toBe("/api/v1/transactions?size=500&startDate=2026-02-01&endDate=2026-02-28");
+  });
+
+  it("loads the months that contain transactions", async () => {
+    mockedFetch.mockResolvedValue(jsonResponse(months));
+
+    await expect(getTransactionMonths()).resolves.toEqual(months);
+    expect(mockedFetch.mock.calls[0][0]).toBe("/api/v1/transactions/months");
   });
 });
 

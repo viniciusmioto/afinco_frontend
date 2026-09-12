@@ -1,10 +1,27 @@
 import { Inbox } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDate, formatPeriod } from "@/lib/formatters";
 import type { Transaction } from "@/lib/types/transaction";
 import { CategoryTag } from "./category-tag";
 import { TypeBadge } from "./type-badge";
 
-export function TransactionList({ transactions }: { transactions: Transaction[] }) {
+function sourceLabel(transaction: Transaction) {
+  return transaction.statement
+    ? `Statement ${formatPeriod(transaction.statement.periodStart, transaction.statement.periodEnd)}`
+    : "Manual entry";
+}
+
+interface TransactionListProps {
+  transactions: Transaction[];
+  /** Shows which statement each row came from; redundant when a single statement is already selected. */
+  showSource?: boolean;
+  emptyMessage?: string;
+}
+
+export function TransactionList({
+  transactions,
+  showSource = false,
+  emptyMessage = "Try changing your filters or add a manual entry.",
+}: TransactionListProps) {
   if (transactions.length === 0) {
     return (
       <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
@@ -13,7 +30,7 @@ export function TransactionList({ transactions }: { transactions: Transaction[] 
             <Inbox aria-hidden="true" className="size-5" />
           </span>
           <h2 className="mt-4 font-semibold text-slate-900">No transactions found</h2>
-          <p className="mt-1 text-sm text-slate-500">Try changing your filters or add a manual entry.</p>
+          <p className="mt-1 text-sm text-slate-500">{emptyMessage}</p>
         </div>
       </div>
     );
@@ -30,6 +47,7 @@ export function TransactionList({ transactions }: { transactions: Transaction[] 
                 <p className="mt-1 text-xs text-slate-500">
                   {transaction.account.bankName} · •••• {transaction.account.accountNumberLast4}
                 </p>
+                {showSource && <p className="mt-0.5 text-xs text-slate-400">{sourceLabel(transaction)}</p>}
               </div>
               <p className="shrink-0 text-base font-bold tabular-nums text-slate-950">
                 {formatCurrency(transaction.amount)}
@@ -55,6 +73,7 @@ export function TransactionList({ transactions }: { transactions: Transaction[] 
                 <th className="px-5 py-3.5">Bank</th>
                 <th className="px-5 py-3.5">Description</th>
                 <th className="px-5 py-3.5">Category</th>
+                {showSource && <th className="px-5 py-3.5">Statement</th>}
                 <th className="px-5 py-3.5">Type</th>
                 <th className="px-5 py-3.5 text-right">Amount</th>
               </tr>
@@ -73,6 +92,9 @@ export function TransactionList({ transactions }: { transactions: Transaction[] 
                     <span className="line-clamp-2">{transaction.description}</span>
                   </td>
                   <td className="px-5 py-4"><CategoryTag category={transaction.category} /></td>
+                  {showSource && (
+                    <td className="whitespace-nowrap px-5 py-4 text-xs font-medium text-slate-500">{sourceLabel(transaction)}</td>
+                  )}
                   <td className="px-5 py-4"><TypeBadge type={transaction.type} /></td>
                   <td className="whitespace-nowrap px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-950">
                     {formatCurrency(transaction.amount)}

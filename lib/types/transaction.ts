@@ -1,3 +1,5 @@
+import type { StatementSummary } from "@/lib/types/statement";
+
 export type TransactionType = "CREDIT" | "DEBIT";
 export type TransactionStatus = "CONFIRMED" | "DUPLICATE_PENDING";
 export type ExpenseType = "PAYMENT" | "FIXED" | "VARIABLE" | "OCCASIONAL";
@@ -26,6 +28,8 @@ export interface Transaction {
   id: number;
   account: Account;
   category: Category;
+  /** Source statement; null for manual entries. */
+  statement: StatementSummary | null;
   date: string;
   amount: number;
   type: TransactionType;
@@ -46,11 +50,16 @@ export interface PageResponse<T> {
   last: boolean;
 }
 
+/** Local refinements applied inside the selected statement or month. */
 export interface TransactionFilters {
   search: string;
   categoryId: string;
-  startDate: string;
-  endDate: string;
+}
+
+export interface TransactionMonth {
+  /** Calendar month as `YYYY-MM`. */
+  month: string;
+  transactionCount: number;
 }
 
 export interface TransactionCreateInput {

@@ -36,9 +36,9 @@ export function ParsedTransactionReview({
         {rows.map((row) => (
           <article
             className={`rounded-2xl border bg-white p-4 shadow-panel ${
-              row.parsed.duplicate ? "border-amber-300 bg-amber-50/70" : "border-slate-200"
+              row.duplicate ? "border-amber-300 bg-amber-50/70" : "border-slate-200"
             } ${row.included ? "" : skippedRowStyles}`}
-            data-duplicate={row.parsed.duplicate ? "true" : "false"}
+            data-duplicate={row.duplicate ? "true" : "false"}
             data-included={row.included ? "true" : "false"}
             data-testid={`review-card-${row.id}`}
             key={row.id}
@@ -53,7 +53,7 @@ export function ParsedTransactionReview({
               </p>
             </div>
 
-            {row.parsed.duplicate && <DuplicateNotice />}
+            {row.duplicate && <DuplicateNotice duplicateOf={row.duplicateOf} />}
 
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
               <time className="mr-auto text-xs font-medium text-slate-500" dateTime={row.parsed.date}>
@@ -70,7 +70,7 @@ export function ParsedTransactionReview({
                 onChange={(categoryId) => onCategoryChange(row.id, categoryId)}
                 value={row.categoryId}
               />
-              {row.parsed.duplicate ? (
+              {row.duplicate ? (
                 <DuplicateActions onIncludedChange={onIncludedChange} row={row} />
               ) : (
                 <IncludeToggle disabled={disabled} onIncludedChange={onIncludedChange} row={row} />
@@ -99,10 +99,10 @@ export function ParsedTransactionReview({
             <tbody className="divide-y divide-slate-100">
               {rows.map((row) => (
                 <tr
-                  className={`transition ${row.parsed.duplicate ? duplicateRowStyles : "hover:bg-slate-50/70"} ${
+                  className={`transition ${row.duplicate ? duplicateRowStyles : "hover:bg-slate-50/70"} ${
                     row.included ? "" : skippedRowStyles
                   }`}
-                  data-duplicate={row.parsed.duplicate ? "true" : "false"}
+                  data-duplicate={row.duplicate ? "true" : "false"}
                   data-included={row.included ? "true" : "false"}
                   data-testid={`review-row-${row.id}`}
                   key={row.id}
@@ -112,7 +112,7 @@ export function ParsedTransactionReview({
                   </td>
                   <td className="max-w-sm px-5 py-4">
                     <p className="line-clamp-2 text-sm font-medium text-slate-900">{row.parsed.description}</p>
-                    {row.parsed.duplicate && <DuplicateNotice />}
+                    {row.duplicate && <DuplicateNotice duplicateOf={row.duplicateOf} />}
                   </td>
                   <td className="px-5 py-4">
                     <TypeBadge type={row.parsed.type} />
@@ -130,7 +130,7 @@ export function ParsedTransactionReview({
                     />
                   </td>
                   <td className="px-5 py-4">
-                    {row.parsed.duplicate ? (
+                    {row.duplicate ? (
                       <DuplicateActions onIncludedChange={onIncludedChange} row={row} />
                     ) : (
                       <IncludeToggle disabled={disabled} onIncludedChange={onIncludedChange} row={row} />
@@ -146,11 +146,11 @@ export function ParsedTransactionReview({
   );
 }
 
-function DuplicateNotice() {
+function DuplicateNotice({ duplicateOf }: { duplicateOf: string | null }) {
   return (
     <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900">
       <TriangleAlert aria-hidden="true" className="size-3.5" />
-      Possible duplicate
+      {duplicateOf ? `Also in ${duplicateOf}` : "Possible duplicate"}
     </p>
   );
 }

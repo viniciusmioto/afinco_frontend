@@ -6,10 +6,11 @@ App Router, React 19, TypeScript, Tailwind CSS, and Lucide icons.
 ## Project status
 
 An authenticated login flow and two finance screens are built and tested:
-`/transactions` (ledger with local search and filters, manual entry) and
-`/upload` (PDF statement import with first-account creation, duplicate
-resolution, and batch save). 102 tests pass across 15 suites; lint, type
-checking, and the production build report no warnings.
+`/transactions` (one statement or one month at a time, with search, category
+filter, and manual entry) and `/upload` (multi-file PDF statement import with
+parallel parsing, cross-file duplicate detection, first-account creation, and
+per-statement saving). 133 tests pass across 18 suites; lint, type checking, and
+the production build report no warnings.
 
 Requires the [afinco_backend](https://github.com/viniciusmioto/afinco_backend)
 API. The backend owns authentication and finance data; this application keeps
@@ -66,14 +67,17 @@ Ordered roughly by how much each one blocks real use.
    (the backend has no update/delete endpoint either).
 4. **Transaction editing and deletion.** No UI, and the backend has no update
    endpoint either.
-5. **Server-side filtering and pagination.** `/transactions` fetches the latest
-   100 records and filters them in the browser, so anything older is invisible
-   and the backend's `startDate`/`endDate`/`accountId`/`categoryId`/`type`/
-   `status`/`page`/`size` query parameters go unused.
+5. **Paging inside one scope.** `/transactions` loads a whole statement or month
+   (up to 500 rows) and applies search and category filters in the browser. A
+   month with more than 500 rows shows the newest 500 with a notice.
 6. **Category management.** No UI for creating or renaming categories, pending
    backend endpoints.
 7. **Checking-account import.** The statement-type toggle offers it, but the
    backend parser does not exist yet, so those uploads fail with `422`.
+8. **Undoing an import.** A saved statement cannot be deleted from the UI (the
+   backend has no statement delete endpoint yet).
+9. **Legacy rows.** Transactions saved before statements existed have no
+   statement, so they appear only in the month view.
 
 ## Run locally
 
@@ -115,10 +119,12 @@ npm run lint
 npm run build
 ```
 
-Jest covers the statement import with mocked API responses: upload payload and
-multipart construction, automatic category selection, payment net totals,
-duplicate toggle state, category overrides, batch payload generation, and the
-error paths for a rejected file, a failed parse, and a failed save. Pure review
+Jest covers the statement import with mocked API responses: parallel parsing
+limits, per-file failures and retries, cross-file duplicates, identical periods,
+category overrides, statement payload generation, sequential "save all", and
+first-account creation. The ledger tests cover statement/month resolution from
+the URL, view switching, stepping, and empty states using an in-memory
+`next/navigation` stand-in (`test/next-navigation.ts`). Pure review
 logic lives in `lib/statements/` so payload generation is unit-tested apart
 from the React tree.
 
@@ -126,47 +132,55 @@ from the React tree.
 
 ### `/transactions`
 
-Loads up to the latest 100 backend records and applies search, category, and
-date filters locally. Account and category choices come from the backend's
-reference endpoints, so the manual-entry modal works before the first
-transaction as soon as an account exists. Payment categories reduce the
-`Visible net` summary while all stored row amounts remain positive.
+The ledger never shows every transaction at once. It shows exactly one scope,
+kept in the URL so refreshes and shared links reopen it:
+
+- **By statement** (default): `/transactions?view=statement&statement=7`. The
+  selector lists imported statements newest period first with their account and
+  row count; the arrow buttons step to the older or newer statement. With no
+  `statement` parameter, or an unknown id, the newest statement opens.
+- **By month**: `/transactions?view=month&month=2026-07` shows transactions
+  dated in that calendar month from any statement, plus manual entries. A
+  **Statement** column names each row's source statement or "Manual entry".
+
+Switching views keeps your place: a statement opens the month its period ends
+in, and a month opens the statement that ends in it. When no statements exist
+but manual entries do, the page opens by month. Summary cards, search, and the
+category filter apply to the selected scope. A manual entry is shown in its
+month right after it is saved. Months come from `GET /api/v1/transactions/months`
+and statements from `GET /api/v1/statements`. Payment categories reduce the
+`Visible net` summary while stored amounts remain positive.
 
 ### `/upload`
 
-Imports a PDF statement in two steps.
+**1. Add statements.** Drop or pick one or more PDFs. Each file is validated
+locally (PDF only, non-empty, within 10 MiB) and parsing starts immediately; no
+extra click is needed. Files parse in parallel, at most two at a time
+(`MAX_PARALLEL_PARSES`), so a batch is fast without flooding the backend. The
+queue shows each file's status (queued, parsing, ready, failed, saving, saved),
+its billing period, row and duplicate counts, and import total. A failed parse
+stays isolated and can be retried; locally rejected files explain why and can
+be removed. Picking the same file twice is ignored.
 
-**1. Attach and parse.** A mobile-first drop container accepts a dragged PDF or
-a tap that opens the native file picker. Files are checked locally before any
-request: PDF only, non-empty, and within the backend's 10 MiB cap. The statement
-type (`CREDIT_CARD` or `CHECKING_ACCOUNT`) is chosen before parsing and posted
-with the file to `POST /api/v1/statements/upload` as multipart form data; the
-`Content-Type` header is deliberately left unset so the browser generates the
-multipart boundary Spring needs.
+**2. Review.** Parsed statements are listed chronologically, and the review
+follows the oldest one until you choose another. Rows the backend flagged
+(already saved, or repeated inside the statement) and rows that also appear in
+another queued file ("Also in july.pdf") are amber and start skipped. A file
+covering exactly the same period as another queued file is called out. Each row
+keeps its suggested category, which can be overridden, and banner actions import
+or skip every flagged row. When no account exists, the save bar offers an inline
+**Create account** form that becomes the default for every queued statement.
 
-**2. Review and save.** Parsed rows render as a table on desktop and as a
-touch-friendly card stack on smaller viewports. Rows the upload flagged as
-possible duplicates carry amber accents, a "Possible duplicate" badge, and
-inline **Import anyway** / **Skip** actions; banner-level actions import or skip
-every flagged row at once. Flagged rows start skipped so an accidental save can
-never double-count spending, and clean rows start included with an import
-checkbox. Every row exposes a category dropdown pre-selected from the backend's
-categorization suggestion. An unknown suggestion safely falls back to
-`Occasional`.
+**3. Save.** **Save N transactions** stores the selected statement with
+`POST /api/v1/statements`; **Save all ready** saves every reviewable statement
+one after another, oldest first. Skipped rows are never sent, and a kept
+duplicate carries `forceDuplicate: true`. Re-importing a period that is already
+saved adds the rows to that existing statement. Each saved statement links to
+its ledger view.
 
-**Save** sends the finalized rows to `POST /api/v1/transactions/batch`. Skipped
-rows are dropped from the payload entirely, and a kept duplicate is sent with
-`forceDuplicate: true` so the API confirms it rather than re-flagging it. Saving
-is blocked until a destination account is selected and at least one row is kept.
-Payment rows retain their positive amount in the batch payload but reduce the
-displayed import total.
-
-Account and category options come from `GET /api/v1/accounts` and
-`GET /api/v1/categories`. Accounts have no backend seed, so on a fresh database
-the save bar shows an inline **Create account** form (bank name pre-filled from
-the parsed statement, last four digits, currency defaulting to `CAD`). It calls
-`POST /api/v1/accounts`, then selects the new account as the destination so the
-batch can be saved immediately.
+Queue state lives in a pure reducer (`lib/statements/import-queue.ts`) and the
+scheduling, parsing, and saving in `useStatementImport`, so the behaviour is
+unit-tested without rendering.
 
 Row identity uses the parsed row's position, not its signature: repeated rows in
 one statement share a signature, so keying on it alone would collapse them.

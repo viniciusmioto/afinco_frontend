@@ -44,6 +44,19 @@ describe("ParsedTransactionReview", () => {
     expect(within(duplicateRow).getByText("Possible duplicate")).toBeInTheDocument();
   });
 
+  it("names the other queued file that already contains a flagged row", () => {
+    const crossFile = buildReviewRows(
+      [{ ...parsedTransactions[0], duplicate: false }],
+      categories,
+      new Map([["a".repeat(64), "august.pdf"]]),
+    );
+    renderReview({ rows: crossFile });
+    const row = within(screen.getByTestId("review-table")).getByTestId(`review-row-${crossFile[0].id}`);
+
+    expect(row).toHaveAttribute("data-duplicate", "true");
+    expect(within(row).getByText("Also in august.pdf")).toBeInTheDocument();
+  });
+
   it("starts flagged duplicates as skipped and clean rows as importing", () => {
     renderReview();
     const table = screen.getByTestId("review-table");
