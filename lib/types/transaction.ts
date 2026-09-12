@@ -70,3 +70,14 @@ export interface TransactionCreateInput {
   type: TransactionType;
   description: string;
 }
+
+/** What deleting all transaction data would remove. */
+export interface TransactionDataSummary {
+  transactionCount: number;
+  statementCount: number;
+}
+
+export interface TransactionDataDeletion {
+  deletedTransactions: number;
+  deletedStatements: number;
+}

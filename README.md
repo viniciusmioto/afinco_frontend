@@ -9,8 +9,9 @@ An authenticated login flow and two finance screens are built and tested:
 `/transactions` (one statement or one month at a time, with search, category
 filter, and manual entry) and `/upload` (multi-file PDF statement import with
 parallel parsing, cross-file duplicate detection, first-account creation, and
-per-statement saving). 133 tests pass across 18 suites; lint, type checking, and
-the production build report no warnings.
+per-statement saving), plus an account menu with a confirmed "delete all
+transaction data" reset. 150 tests pass across 21 suites; lint, type checking,
+and the production build report no warnings.
 
 Requires the [afinco_backend](https://github.com/viniciusmioto/afinco_backend)
 API. The backend owns authentication and finance data; this application keeps
@@ -189,5 +190,25 @@ one statement share a signature, so keying on it alone would collapse them.
 
 `AppShell` renders the sidebar on desktop and a scrollable section-tab row on
 mobile. Routes pass a `current` label to mark the active entry, which keeps the
-shell a server component. The desktop sidebar is sticky, so **Sign out** stays
-visible on long ledgers. Overview and Accounts are placeholders without routes.
+shell a server component. The desktop sidebar is sticky, so the account menu
+stays visible on long ledgers. Overview and Accounts are placeholders without
+routes.
+
+### Account menu and data reset
+
+The signed-in email in the sidebar (or the person icon in the mobile header)
+opens an accessible account menu (arrow keys, Escape, outside click) with
+**Delete all transaction data** and **Sign out**.
+
+**Delete all transaction data** never deletes directly. It opens a confirmation
+dialog asking "Are you sure you want to delete all transaction data?" and states
+exactly what will be removed, using `GET /api/v1/transaction-data` (for example
+"251 transactions and 7 imported statements"), and that accounts, categories,
+and the login are kept. **Cancel** is the large, dark, initially focused button,
+and Escape also cancels. **Delete data** is a small outlined secondary button,
+disabled when there is nothing to delete. Focus stays inside the dialog, which
+renders at the page root so the blurred mobile header cannot clip it.
+
+After `DELETE /api/v1/transaction-data` succeeds, the dialog reports the counts
+and offers **Import statements** (the focused action) or **Close**, which
+reloads the current page without its old statement or month parameters.

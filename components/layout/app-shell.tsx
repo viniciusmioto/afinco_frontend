@@ -8,7 +8,7 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AuthGate } from "@/components/auth/auth-gate";
-import { UserControls } from "@/components/auth/user-controls";
+import { UserMenu } from "@/components/auth/user-menu";
 
 const navigation = [
   { label: "Overview", icon: ChartNoAxesCombined, href: null },
@@ -62,7 +62,7 @@ export function AppShell({ children, current = "Transactions" }: { children: Rea
             })}
           </nav>
 
-          <div className="mt-auto"><UserControls /></div>
+          <div className="mt-auto"><UserMenu /></div>
         </aside>
 
         <div className="min-w-0">
@@ -75,7 +75,7 @@ export function AppShell({ children, current = "Transactions" }: { children: Rea
             </div>
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{current}</span>
-              <UserControls compact />
+              <UserMenu compact />
             </div>
           </header>
 
