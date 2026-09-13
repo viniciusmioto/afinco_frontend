@@ -35,7 +35,7 @@ export function ParsedTransactionReview({
       <div className="space-y-3 lg:hidden" data-testid="review-cards">
         {rows.map((row) => (
           <article
-            className={`rounded-2xl border bg-white p-4 shadow-panel ${
+            className={`rounded-2xl border bg-white p-4 shadow-card ${
               row.duplicate ? "border-amber-300 bg-amber-50/70" : "border-slate-200"
             } ${row.included ? "" : skippedRowStyles}`}
             data-duplicate={row.duplicate ? "true" : "false"}
@@ -81,7 +81,7 @@ export function ParsedTransactionReview({
       </div>
 
       <div
-        className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-panel lg:block"
+        className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card lg:block"
         data-testid="review-table"
       >
         <div className="overflow-x-auto">

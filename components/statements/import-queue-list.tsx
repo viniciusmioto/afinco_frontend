@@ -49,7 +49,7 @@ export function ImportQueueList({
   const counts = countItems(items);
 
   return (
-    <section aria-label="Import queue" className="rounded-2xl border border-slate-200 bg-white shadow-panel">
+    <section aria-label="Import queue" className="rounded-2xl border border-slate-200 bg-white shadow-card">
       <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div>
           <h2 className="text-base font-bold tracking-tight text-slate-950">

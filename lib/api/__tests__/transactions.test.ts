@@ -37,17 +37,37 @@ describe("getTransactions", () => {
   it("requests one calendar month through its inclusive date bounds", async () => {
     mockedFetch.mockResolvedValue(jsonResponse(page));
 
-    await getTransactions({ view: "month", month: "2026-02" });
+    await getTransactions({ view: "month", month: "2026-02", bank: null });
 
     expect(mockedFetch.mock.calls[0][0])
       .toBe("/api/v1/transactions?size=500&startDate=2026-02-01&endDate=2026-02-28");
   });
 
-  it("loads the months that contain transactions", async () => {
+  it("narrows a scope to one status for analysis", async () => {
+    mockedFetch.mockResolvedValue(jsonResponse(page));
+
+    await getTransactions({ view: "statement", statementId: 12 }, undefined, "CONFIRMED");
+
+    expect(mockedFetch.mock.calls[0][0]).toBe("/api/v1/transactions?size=500&status=CONFIRMED&statementId=12");
+  });
+
+  it("limits a month to one bank when asked", async () => {
+    mockedFetch.mockResolvedValue(jsonResponse(page));
+
+    await getTransactions({ view: "month", month: "2026-02", bank: "TD Bank" });
+
+    expect(mockedFetch.mock.calls[0][0])
+      .toBe("/api/v1/transactions?size=500&startDate=2026-02-01&endDate=2026-02-28&bankName=TD+Bank");
+  });
+
+  it("loads the months that contain transactions, for every bank or one", async () => {
     mockedFetch.mockResolvedValue(jsonResponse(months));
 
-    await expect(getTransactionMonths()).resolves.toEqual(months);
+    await expect(getTransactionMonths(null)).resolves.toEqual(months);
+    await getTransactionMonths("TD Bank");
+
     expect(mockedFetch.mock.calls[0][0]).toBe("/api/v1/transactions/months");
+    expect(mockedFetch.mock.calls[1][0]).toBe("/api/v1/transactions/months?bankName=TD+Bank");
   });
 });
 

@@ -48,20 +48,38 @@ afterEach(() => jest.clearAllMocks());
 
 async function renderPage() {
   render(<TransactionsPage />);
-  return screen.findByTestId("transaction-table");
+  return screen.findByTestId("credit-transactions");
+}
+
+function summaryCard(label: string) {
+  const summary = screen.getByRole("region", { name: "Transaction summary" });
+  return within(summary).getByText(label).parentElement as HTMLElement;
 }
 
 describe("TransactionsPage", () => {
-  it("opens the newest statement by default and records it in the URL", async () => {
+  it("opens the newest statement by default with its bank and records it in the URL", async () => {
     await renderPage();
 
     expect(mockedGetTransactions).toHaveBeenLastCalledWith({ view: "statement", statementId: 12 }, expect.any(AbortSignal));
+    expect(mockedGetMonths).toHaveBeenCalledWith("TD Bank", expect.any(AbortSignal));
     expect(currentMockSearch()).toBe("view=statement&statement=12");
     expect(screen.getByRole("button", { name: "By statement" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("combobox", { name: "Statement" })).toHaveValue("12");
-    expect(screen.getByText("In this statement")).toBeInTheDocument();
-    expect(within(screen.getByTestId("transaction-table")).queryByRole("columnheader", { name: "Statement" }))
+    expect(screen.getByRole("option", { name: "Aug 14 – Sep 13, 2026" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Break down this period" })).toHaveAttribute("href", "/breakdown?view=statement&statement=12");
+    expect(within(screen.getByTestId("credit-transactions")).queryByRole("columnheader", { name: "Statement" }))
       .not.toBeInTheDocument();
+  });
+
+  it("requires one bank in the statement view and says so", async () => {
+    await renderPage();
+
+    const bank = screen.getByRole("combobox", { name: "Bank" });
+    expect(bank).toHaveValue("TD Bank");
+    expect(within(bank).queryByRole("option", { name: "All banks" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("scope-note")).toHaveTextContent("Statements belong to one bank");
+    // A credit card statement only holds credit transactions.
+    expect(screen.queryByTestId("debit-transactions")).not.toBeInTheDocument();
   });
 
   it("never requests transactions without a statement or month scope", async () => {
@@ -85,21 +103,56 @@ describe("TransactionsPage", () => {
     expect(screen.getByRole("button", { name: "Older statement" })).toBeDisabled();
   });
 
-  it("switches to the month the selected statement ends in and shows each row's source", async () => {
+  it("switches to the month the selected statement ends in, keeping the bank, and shows each row's source", async () => {
     const user = userEvent.setup();
     setMockSearch("view=statement&statement=11");
     await renderPage();
 
     await user.click(screen.getByRole("button", { name: "By month" }));
 
-    await waitFor(() =>
-      expect(mockedGetTransactions).toHaveBeenLastCalledWith({ view: "month", month: "2026-08" }, expect.any(AbortSignal)));
-    expect(currentMockSearch()).toBe("view=month&month=2026-08");
-    expect(await screen.findByRole("columnheader", { name: "Statement" })).toBeInTheDocument();
-    const table = screen.getByTestId("transaction-table");
-    expect(within(table).getByText("Statement Aug 14 – Sep 13, 2026")).toBeInTheDocument();
-    expect(within(table).getByText("Manual entry")).toBeInTheDocument();
-    expect(screen.getByText("In this month")).toBeInTheDocument();
+    await waitFor(() => expect(mockedGetTransactions).toHaveBeenLastCalledWith(
+      { view: "month", month: "2026-08", bank: "TD Bank" }, expect.any(AbortSignal)));
+    expect(currentMockSearch()).toBe("view=month&month=2026-08&bank=TD+Bank");
+    const credit = await screen.findByTestId("credit-transactions");
+    expect(within(credit).getByRole("columnheader", { name: "Statement" })).toBeInTheDocument();
+    expect(within(credit).queryByRole("columnheader", { name: "Bank" })).not.toBeInTheDocument();
+    expect(within(credit).getByRole("table")).toHaveTextContent("Statement Aug 14 – Sep 13, 2026");
+    expect(within(screen.getByTestId("debit-transactions")).getByRole("table")).toHaveTextContent("Manual entry");
+    expect(screen.getByTestId("scope-note")).toHaveTextContent("Showing TD Bank only.");
+  });
+
+  it("separates credit and debit transactions and summarizes each", async () => {
+    setMockSearch("view=month&month=2026-09");
+    await renderPage();
+
+    const credit = screen.getByTestId("credit-transactions");
+    const debit = screen.getByTestId("debit-transactions");
+    expect(within(credit).getByRole("table", { name: "Credit transactions" })).toHaveTextContent("Harbour Market");
+    expect(within(credit).getByRole("table")).not.toHaveTextContent("Monthly payroll");
+    expect(within(debit).getByRole("table", { name: "Debit transactions" })).toHaveTextContent("Monthly payroll");
+    expect(within(credit).getByRole("columnheader", { name: "Type" })).toBeInTheDocument();
+
+    expect(summaryCard("Total spent")).toHaveTextContent("$2,542.35");
+    expect(summaryCard("Credit")).toHaveTextContent("1 transaction$42.35 spent");
+    expect(summaryCard("Debit")).toHaveTextContent("1 transaction$2,500.00 spent");
+  });
+
+  it("combines every bank by month and narrows to one bank", async () => {
+    const user = userEvent.setup();
+    setMockSearch("view=month&month=2026-09");
+    await renderPage();
+
+    const bank = screen.getByRole("combobox", { name: "Bank" });
+    expect(bank).toHaveValue("");
+    expect(screen.getByTestId("scope-note")).toHaveTextContent("combines transactions from all banks");
+    expect(within(screen.getByTestId("credit-transactions")).getByRole("columnheader", { name: "Bank" })).toBeInTheDocument();
+
+    await user.selectOptions(bank, "TD Bank");
+
+    await waitFor(() => expect(mockedGetTransactions).toHaveBeenLastCalledWith(
+      { view: "month", month: "2026-09", bank: "TD Bank" }, expect.any(AbortSignal)));
+    expect(currentMockSearch()).toBe("view=month&month=2026-09&bank=TD+Bank");
+    await waitFor(() => expect(mockedGetMonths).toHaveBeenLastCalledWith("TD Bank", expect.any(AbortSignal)));
   });
 
   it("picks a month from the selector", async () => {
@@ -109,9 +162,9 @@ describe("TransactionsPage", () => {
 
     await user.selectOptions(screen.getByRole("combobox", { name: "Month" }), "2026-07");
 
-    await waitFor(() =>
-      expect(mockedGetTransactions).toHaveBeenLastCalledWith({ view: "month", month: "2026-07" }, expect.any(AbortSignal)));
-    expect(screen.getByRole("option", { name: "July 2026 · 14 transactions" })).toBeInTheDocument();
+    await waitFor(() => expect(mockedGetTransactions).toHaveBeenLastCalledWith(
+      { view: "month", month: "2026-07", bank: null }, expect.any(AbortSignal)));
+    expect(screen.getByRole("option", { name: "July 2026" })).toBeInTheDocument();
   });
 
   it("falls back to the newest statement when the URL names an unknown one", async () => {
@@ -122,11 +175,12 @@ describe("TransactionsPage", () => {
     expect(mockRouter.replace).toHaveBeenCalledWith("/transactions?view=statement&statement=12", { scroll: false });
   });
 
-  it("opens by month when only manual transactions exist", async () => {
+  it("opens by month across banks when only manual transactions exist", async () => {
     mockedGetStatements.mockResolvedValue([]);
     await renderPage();
 
-    expect(mockedGetTransactions).toHaveBeenLastCalledWith({ view: "month", month: "2026-09" }, expect.any(AbortSignal));
+    expect(mockedGetTransactions).toHaveBeenLastCalledWith(
+      { view: "month", month: "2026-09", bank: null }, expect.any(AbortSignal));
   });
 
   it("explains an empty ledger instead of loading every transaction", async () => {
@@ -141,13 +195,13 @@ describe("TransactionsPage", () => {
 
   it("filters the selected statement by search", async () => {
     const user = userEvent.setup();
-    const table = await renderPage();
+    const credit = await renderPage();
 
     await user.type(screen.getByRole("searchbox", { name: "Search transactions" }), "harbour");
 
-    expect(within(table).getByText("Harbour Market")).toBeInTheDocument();
-    expect(within(table).queryByText("Monthly payroll")).not.toBeInTheDocument();
+    expect(within(credit).getByRole("table")).toHaveTextContent("Harbour Market");
     expect(screen.getByText("1 visible transaction")).toBeInTheDocument();
+    expect(summaryCard("Debit")).toHaveTextContent("0 transactions");
   });
 
   it("shows a manual entry's month after creating it", async () => {
@@ -163,21 +217,22 @@ describe("TransactionsPage", () => {
     await user.click(screen.getByRole("button", { name: "Save transaction" }));
 
     await waitFor(() => expect(mockedCreateTransaction).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(currentMockSearch()).toBe("view=month&month=2026-08"));
-    await waitFor(() =>
-      expect(mockedGetTransactions).toHaveBeenLastCalledWith({ view: "month", month: "2026-08" }, expect.any(AbortSignal)));
+    await waitFor(() => expect(currentMockSearch()).toBe("view=month&month=2026-08&bank=TD+Bank"));
+    await waitFor(() => expect(mockedGetTransactions).toHaveBeenLastCalledWith(
+      { view: "month", month: "2026-08", bank: "TD Bank" }, expect.any(AbortSignal)));
     await waitFor(() => expect(mockedGetMonths).toHaveBeenCalledTimes(2));
   });
 
-  it("subtracts payment categories from the visible net amount", async () => {
+  it("leaves payments out of the amount spent", async () => {
     mockedGetTransactions.mockResolvedValue(pageOf([{
       ...transactions[0],
       amount: 40,
       category: categories.find((category) => category.name === "Payment")!,
     }]));
 
-    render(<TransactionsPage />);
+    await renderPage();
 
-    expect(await screen.findByText("-$40.00")).toBeInTheDocument();
+    expect(within(screen.getByTestId("credit-transactions")).getByRole("table")).toHaveTextContent("-$40.00");
+    expect(summaryCard("Total spent")).toHaveTextContent("$0.00$40.00 in payments not counted");
   });
 });

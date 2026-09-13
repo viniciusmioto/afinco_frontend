@@ -1,3 +1,4 @@
+import type { SpendingOverview, SpendingPeriod } from "@/lib/types/analytics";
 import type { ParsedTransaction, Statement, StatementUploadResult } from "@/lib/types/statement";
 import type { Account, Category, Transaction, TransactionMonth } from "@/lib/types/transaction";
 
@@ -149,6 +150,69 @@ export const julyUploadResult: StatementUploadResult = {
       duplicate: false,
       expenseType: "VARIABLE",
       categoryName: "Groceries",
+    },
+  ],
+};
+
+const spendingCategories: Category[] = [
+  { id: 2, name: "Groceries", expenseType: "VARIABLE", colorCode: "#2563EB" },
+  { id: 3, name: "Subscriptions", expenseType: "FIXED", colorCode: "#8B5CF6" },
+  { id: 5, name: "Transport", expenseType: "FIXED", colorCode: "#0EA5E9" },
+  { id: 7, name: "Food & Leisure", expenseType: "VARIABLE", colorCode: "#F59E0B" },
+  { id: 9, name: "Occasional", expenseType: "OCCASIONAL", colorCode: "#EC4899" },
+];
+
+function monthPeriod(month: string, lastDay: number, complete: boolean, amounts: Record<number, number>): SpendingPeriod {
+  return {
+    key: month,
+    startDate: `${month}-01`,
+    endDate: `${month}-${lastDay}`,
+    statement: null,
+    complete,
+    categories: Object.entries(amounts).map(([categoryId, amount]) => ({
+      categoryId: Number(categoryId),
+      amount,
+      transactionCount: 2,
+    })),
+  };
+}
+
+/**
+ * Three complete months (totals 500, 600, 700) and a partial August (150).
+ * Fixed / variable / occasional: May 150/300/50, June 150/350/100, July 200/450/50, August 50/100/0.
+ */
+export const monthlySpending: SpendingOverview = {
+  groupBy: "MONTH",
+  bankName: null,
+  categories: spendingCategories,
+  periods: [
+    monthPeriod("2026-05", 31, true, { 3: 50, 5: 100, 2: 300, 9: 50 }),
+    monthPeriod("2026-06", 30, true, { 3: 50, 5: 100, 2: 250, 7: 100, 9: 100 }),
+    monthPeriod("2026-07", 31, true, { 3: 50, 5: 150, 2: 400, 7: 50, 9: 50 }),
+    monthPeriod("2026-08", 31, false, { 5: 50, 2: 100 }),
+  ],
+};
+
+export const statementSpending: SpendingOverview = {
+  groupBy: "STATEMENT",
+  bankName: "TD Bank",
+  categories: spendingCategories,
+  periods: [
+    {
+      key: "11",
+      startDate: "2026-07-14",
+      endDate: "2026-08-13",
+      statement: { id: 11, statementType: "CREDIT_CARD", periodStart: "2026-07-14", periodEnd: "2026-08-13" },
+      complete: true,
+      categories: [{ categoryId: 2, amount: 320.5, transactionCount: 6 }],
+    },
+    {
+      key: "12",
+      startDate: "2026-08-14",
+      endDate: "2026-09-13",
+      statement: { id: 12, statementType: "CREDIT_CARD", periodStart: "2026-08-14", periodEnd: "2026-09-13" },
+      complete: true,
+      categories: [{ categoryId: 5, amount: 104.5, transactionCount: 1 }],
     },
   ],
 };

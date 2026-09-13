@@ -44,7 +44,7 @@ export function StatementDropzone({
   };
 
   return (
-    <section aria-labelledby={`${inputId}-heading`} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-panel sm:p-6">
+    <section aria-labelledby={`${inputId}-heading`} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
       <div className={compact ? "flex flex-col gap-4 lg:flex-row lg:items-end" : ""}>
         <div className={compact ? "lg:w-80" : ""}>
           <h2 className="text-base font-bold tracking-tight text-slate-950" id={`${inputId}-heading`}>

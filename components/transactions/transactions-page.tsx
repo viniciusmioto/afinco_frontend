@@ -1,52 +1,32 @@
 "use client";
 
-import { AlertCircle, ArrowDownLeft, ArrowUpRight, Inbox, Plus, ReceiptText, RefreshCw, Upload } from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ChartColumnStacked, CreditCard, Inbox, Landmark, Plus, RefreshCw, Upload, Wallet, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { getStatements } from "@/lib/api/statements";
-import {
-  createTransaction,
-  getAccounts,
-  getCategories,
-  getTransactionMonths,
-  getTransactions,
-} from "@/lib/api/transactions";
-import { formatCurrency } from "@/lib/formatters";
-import {
-  monthOf,
-  readRequestedScope,
-  resolveScope,
-  scopeFromKey,
-  scopeKey,
-  scopeToSearch,
-  switchView,
-  type TransactionScope,
-  type TransactionView,
-} from "@/lib/transactions/scope";
+import { useEffect, useId, useMemo, useState, type ComponentProps } from "react";
+import { createTransaction, getTransactions } from "@/lib/api/transactions";
+import { formatCurrency, formatMonth, formatPeriod } from "@/lib/formatters";
+import { monthOf, type TransactionScope, type TransactionView } from "@/lib/transactions/scope";
+import { ofType, paymentTotal, spentTotal } from "@/lib/transactions/summary";
 import type { Statement } from "@/lib/types/statement";
 import type {
-  Account,
-  Category,
   PageResponse,
   Transaction,
   TransactionCreateInput,
   TransactionFilters,
-  TransactionMonth,
+  TransactionType,
 } from "@/lib/types/transaction";
 import { ManualEntryModal } from "./manual-entry-modal";
 import { TransactionFiltersBar } from "./transaction-filters";
 import { TransactionList } from "./transaction-list";
 import { TransactionScopeBar } from "./transaction-scope-bar";
-
-interface Catalog {
-  accounts: Account[];
-  categories: Category[];
-  statements: Statement[];
-  months: TransactionMonth[];
-}
+import { usePeriodScope } from "./use-period-scope";
 
 const initialFilters: TransactionFilters = { search: "", categoryId: "" };
+
+const sections: Record<TransactionType, { title: string; description: string; icon: LucideIcon }> = {
+  CREDIT: { title: "Credit", description: "Credit card transactions", icon: CreditCard },
+  DEBIT: { title: "Debit", description: "Debit card and checking account transactions", icon: Landmark },
+};
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -56,15 +36,24 @@ function isAbort(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-export function TransactionsPage() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const requested = useMemo(() => readRequestedScope(searchParams), [searchParams]);
+function transactionCount(count: number) {
+  return `${count.toLocaleString("en-CA")} transaction${count === 1 ? "" : "s"}`;
+}
 
-  const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [catalogVersion, setCatalogVersion] = useState(0);
+export function TransactionsPage() {
+  const {
+    catalog,
+    catalogError,
+    reloadCatalog,
+    banks,
+    months,
+    resolved,
+    scopeKey,
+    stableScope,
+    goToScope,
+    changeView,
+    changeBank,
+  } = usePeriodScope("Transactions could not be loaded");
 
   const [page, setPage] = useState<PageResponse<Transaction> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -77,47 +66,14 @@ export function TransactionsPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
-    setCatalogError(null);
-    Promise.all([
-      getAccounts(controller.signal),
-      getCategories(controller.signal),
-      getStatements(controller.signal),
-      getTransactionMonths(controller.signal),
-    ])
-      .then(([accounts, categories, statements, months]) => setCatalog({ accounts, categories, statements, months }))
-      .catch((error: unknown) => {
-        if (!isAbort(error)) setCatalogError(errorMessage(error, "Transactions could not be loaded"));
-      });
-    return () => controller.abort();
-  }, [catalogVersion]);
-
-  const resolved = useMemo(
-    () => (catalog ? resolveScope(requested, catalog.statements, catalog.months) : null),
-    [catalog, requested],
-  );
-  const currentKey = scopeKey(resolved?.scope ?? null);
-
-  const navigate = useCallback(
-    (search: string) => router.replace(`${pathname}?${search}`, { scroll: false }),
-    [pathname, router],
-  );
-
-  // Keep the URL canonical so a refresh or shared link reopens the same statement or month.
-  useEffect(() => {
-    if (resolved?.scope && searchParams.toString() !== currentKey) navigate(currentKey);
-  }, [resolved, currentKey, searchParams, navigate]);
-
-  useEffect(() => {
-    const scope = scopeFromKey(currentKey);
-    if (!scope) {
+    if (!stableScope) {
       setPage(null);
       return;
     }
     const controller = new AbortController();
     setLoading(true);
     setLoadError(null);
-    getTransactions(scope, controller.signal)
+    getTransactions(stableScope, controller.signal)
       .then(setPage)
       .catch((error: unknown) => {
         if (!isAbort(error)) setLoadError(errorMessage(error, "Transactions could not be loaded"));
@@ -126,7 +82,7 @@ export function TransactionsPage() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [currentKey, reloadToken]);
+  }, [stableScope, reloadToken]);
 
   const transactions = useMemo(() => page?.content ?? [], [page]);
   const visibleTransactions = useMemo(() => {
@@ -139,25 +95,9 @@ export function TransactionsPage() {
     });
   }, [transactions, filters]);
 
-  const totalAmount = visibleTransactions.reduce(
-    (sum, transaction) =>
-      sum + (transaction.category.expenseType === "PAYMENT" ? -transaction.amount : transaction.amount),
-    0,
-  );
-  const creditCount = visibleTransactions.filter((transaction) => transaction.type === "CREDIT").length;
-  const debitCount = visibleTransactions.length - creditCount;
-
-  const changeView = (view: TransactionView) => {
-    if (!catalog || !resolved || view === resolved.view) return;
-    const next = resolveScope(
-      switchView(resolved.scope, view, catalog.statements, catalog.months),
-      catalog.statements,
-      catalog.months,
-    );
-    navigate(next.scope ? scopeToSearch(next.scope) : `view=${view}`);
-  };
-
-  const changeScope = (scope: TransactionScope) => navigate(scopeToSearch(scope));
+  const visibleCredit = ofType(visibleTransactions, "CREDIT");
+  const visibleDebit = ofType(visibleTransactions, "DEBIT");
+  const payments = paymentTotal(visibleTransactions);
 
   const handleCreate = async (input: TransactionCreateInput) => {
     setSubmitting(true);
@@ -165,9 +105,10 @@ export function TransactionsPage() {
     try {
       await createTransaction(input);
       setModalOpen(false);
-      // Manual entries have no statement, so show the month they belong to.
-      navigate(scopeToSearch({ view: "month", month: monthOf(input.date) }));
-      setCatalogVersion((version) => version + 1);
+      // Manual entries have no statement, so show the month they belong to, keeping the bank when it matches.
+      const accountBank = catalog?.accounts.find((account) => account.id === input.accountId)?.bankName ?? null;
+      goToScope({ view: "month", month: monthOf(input.date), bank: resolved?.bank === accountBank ? accountBank : null });
+      reloadCatalog();
       setReloadToken((token) => token + 1);
     } catch (error) {
       setSubmitError(errorMessage(error, "The transaction could not be saved"));
@@ -177,7 +118,15 @@ export function TransactionsPage() {
   };
 
   const view = resolved?.view ?? "statement";
-  const scopeNoun = view === "statement" ? "statement" : "month";
+  const scope = resolved?.scope ?? null;
+  const statement = scope?.view === "statement"
+    ? catalog?.statements.find((candidate) => candidate.id === scope.statementId) ?? null
+    : null;
+  const scopeName = scopeLabel(scope, statement);
+  // A statement holds a single account type; a month can hold both.
+  const sectionTypes: TransactionType[] = statement
+    ? [statement.statementType === "CHECKING_ACCOUNT" ? "DEBIT" : "CREDIT"]
+    : ["CREDIT", "DEBIT"];
 
   return (
     <>
@@ -189,45 +138,67 @@ export function TransactionsPage() {
             Review one statement or one calendar month at a time.
           </p>
         </div>
-        <button
-          className="focus-ring inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white shadow-lg shadow-slate-900/15 transition hover:bg-slate-800"
-          onClick={() => { setSubmitError(null); setModalOpen(true); }}
-          type="button"
-        >
-          <Plus aria-hidden="true" className="size-4" />
-          Add transaction
-        </button>
+        <div className="flex flex-col gap-2 min-[420px]:flex-row">
+          {stableScope && (
+            <Link
+              className="focus-ring inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              href={`/breakdown?${scopeKey}`}
+            >
+              <ChartColumnStacked aria-hidden="true" className="size-4" />
+              Break down this period
+            </Link>
+          )}
+          <button
+            className="focus-ring inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition hover:bg-slate-800"
+            onClick={() => { setSubmitError(null); setModalOpen(true); }}
+            type="button"
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            Add transaction
+          </button>
+        </div>
       </div>
 
       {catalogError ? (
         <div className="mt-7">
-          <ErrorState message={catalogError} onRetry={() => setCatalogVersion((version) => version + 1)} />
+          <ErrorState message={catalogError} onRetry={reloadCatalog} />
         </div>
-      ) : !catalog || !resolved ? (
+      ) : !catalog || !resolved || !months ? (
         <div className="mt-7"><LoadingState /></div>
       ) : (
         <>
           <div className="mt-7">
             <TransactionScopeBar
-              months={catalog.months}
-              onScopeChange={changeScope}
+              banks={banks}
+              months={months}
+              onBankChange={changeBank}
+              onScopeChange={goToScope}
               onViewChange={changeView}
-              scope={resolved.scope}
+              resolved={resolved}
               statements={catalog.statements}
-              view={view}
             />
           </div>
 
-          {resolved.scope ? (
+          {scope ? (
             <>
-              <section aria-label="Transaction summary" className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <SummaryCard icon={ReceiptText} label="Visible net" value={formatCurrency(totalAmount)} />
-                <SummaryCard icon={ArrowUpRight} label="Credits" value={creditCount.toString()} />
-                <SummaryCard icon={ArrowDownLeft} label="Debits" value={debitCount.toString()} />
+              <section aria-label="Transaction summary" className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <SummaryCard
-                  icon={ReceiptText}
-                  label={`In this ${scopeNoun}`}
-                  value={(page?.totalElements ?? 0).toLocaleString("en-CA")}
+                  detail={payments > 0 ? `${formatCurrency(payments)} in payments not counted` : `In ${scopeName}`}
+                  icon={Wallet}
+                  label="Total spent"
+                  value={formatCurrency(spentTotal(visibleTransactions))}
+                />
+                <SummaryCard
+                  detail={`${formatCurrency(spentTotal(visibleCredit))} spent`}
+                  icon={CreditCard}
+                  label="Credit"
+                  value={transactionCount(visibleCredit.length)}
+                />
+                <SummaryCard
+                  detail={`${formatCurrency(spentTotal(visibleDebit))} spent`}
+                  icon={ArrowDownLeft}
+                  label="Debit"
+                  value={transactionCount(visibleDebit.length)}
                 />
               </section>
 
@@ -242,24 +213,34 @@ export function TransactionsPage() {
                   <LoadingState />
                 ) : (
                   <>
-                    <div className="mb-3 flex items-center justify-between px-1 text-xs font-medium text-slate-500">
+                    <div className="mb-4 flex items-center justify-between px-1 text-xs font-medium text-slate-500">
                       <span>{visibleTransactions.length} visible transaction{visibleTransactions.length === 1 ? "" : "s"}</span>
                       {page.totalElements > transactions.length && (
                         <span>Showing the latest {transactions.length} of {page.totalElements}</span>
                       )}
                     </div>
-                    <TransactionList
-                      emptyMessage={`No transactions match your filters in this ${scopeNoun}.`}
-                      showSource={view === "month"}
-                      transactions={visibleTransactions}
-                    />
+                    <div className="space-y-8">
+                      {sectionTypes.map((type) => (
+                        <TransactionSection
+                          emptyMessage={ofType(transactions, type).length === 0
+                            ? `No ${sections[type].title.toLowerCase()} transactions in ${scopeName}.`
+                            : `No ${sections[type].title.toLowerCase()} transactions match your filters.`}
+                          key={type}
+                          label={`${sections[type].title} transactions`}
+                          showBank={view === "month" && !resolved.bank}
+                          showSource={view === "month"}
+                          transactions={type === "CREDIT" ? visibleCredit : visibleDebit}
+                          type={type}
+                        />
+                      ))}
+                    </div>
                   </>
                 )}
               </div>
             </>
           ) : (
             <EmptyScope
-              hasMonths={catalog.months.length > 0}
+              hasMonths={months.length > 0}
               onViewByMonth={() => changeView("month")}
               view={view}
             />
@@ -277,6 +258,41 @@ export function TransactionsPage() {
         submitting={submitting}
       />
     </>
+  );
+}
+
+/** `this statement (Jul 14 – Aug 13, 2026)` or `July 2026`, for sentences. */
+function scopeLabel(scope: TransactionScope | null, statement: Statement | null) {
+  if (scope?.view === "month") return formatMonth(scope.month);
+  return statement ? `the ${formatPeriod(statement.periodStart, statement.periodEnd)} statement` : "this statement";
+}
+
+function TransactionSection({
+  type,
+  transactions,
+  ...listProps
+}: { type: TransactionType } & ComponentProps<typeof TransactionList>) {
+  const headingId = useId();
+  const { title, description, icon: Icon } = sections[type];
+  return (
+    <section aria-labelledby={headingId} data-testid={`${type.toLowerCase()}-transactions`}>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1 px-1">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-8 place-items-center rounded-lg bg-slate-100 text-slate-600">
+            <Icon aria-hidden="true" className="size-4" />
+          </span>
+          <div>
+            <h2 className="font-semibold tracking-tight text-slate-950" id={headingId}>{title}</h2>
+            <p className="text-xs text-slate-500">{description}</p>
+          </div>
+        </div>
+        <p className="text-sm text-slate-500">
+          <span className="font-semibold tabular-nums text-slate-900">{formatCurrency(spentTotal(transactions))}</span> spent
+          {" · "}{transactionCount(transactions.length)}
+        </p>
+      </div>
+      <TransactionList {...listProps} transactions={transactions} />
+    </section>
   );
 }
 
@@ -331,17 +347,20 @@ function SummaryCard({
   icon: Icon,
   label,
   value,
+  detail,
 }: {
-  icon: typeof ReceiptText;
+  icon: LucideIcon;
   label: string;
   value: string;
+  detail: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-panel sm:p-5">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">{label}</p>
-          <p className="mt-2 truncate text-xl font-bold tabular-nums tracking-tight text-slate-950 sm:text-2xl">{value}</p>
+          <p className="mt-2 truncate text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">{value}</p>
+          <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>
         </div>
         <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600">
           <Icon aria-hidden="true" className="size-4" />

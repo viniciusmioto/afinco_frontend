@@ -4,7 +4,7 @@ function safeReturnTo(value: string | string[] | undefined): string {
   const candidate = Array.isArray(value) ? value[0] : value;
   return candidate?.startsWith("/") && !candidate.startsWith("//")
     ? candidate
-    : "/transactions";
+    : "/overview";
 }
 
 export default async function LoginPage({

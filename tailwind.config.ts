@@ -13,7 +13,8 @@ const config: Config = {
         canvas: "#f8fafc",
       },
       boxShadow: {
-        panel: "0 20px 45px -28px rgba(15, 23, 42, 0.35)",
+        // Not named after a color: `shadow-<color>` would recolor the shadow with that color at full opacity.
+        card: "0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px -12px rgba(15, 23, 42, 0.12)",
       },
     },
   },

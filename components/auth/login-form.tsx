@@ -4,7 +4,7 @@ import { Eye, EyeOff, LockKeyhole, WalletCards } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { login } from "@/lib/api/auth";
 
-export function LoginForm({ returnTo = "/transactions" }: { returnTo?: string }) {
+export function LoginForm({ returnTo = "/overview" }: { returnTo?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);

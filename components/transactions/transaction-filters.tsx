@@ -17,7 +17,7 @@ export function TransactionFiltersBar({ value, categories, onChange }: Transacti
   };
 
   return (
-    <section aria-label="Transaction filters" className="rounded-2xl border border-slate-200 bg-white p-3 shadow-panel sm:p-4">
+    <section aria-label="Transaction filters" className="rounded-2xl border border-slate-200 bg-white p-3 shadow-card sm:p-4">
       <div className="grid gap-3 sm:grid-cols-[minmax(240px,1fr)_240px_auto]">
         <label className="relative">
           <span className="sr-only">Search transactions</span>

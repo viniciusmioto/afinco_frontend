@@ -46,7 +46,7 @@ export function StatementReview({
       </div>
 
       {item.status === "saved" && item.saved ? (
-        <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-panel" data-testid="save-outcome" role="status">
+        <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-card" data-testid="save-outcome" role="status">
           <div className="flex items-start gap-3">
             <CircleCheckBig aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-emerald-700" />
             <div>
@@ -132,7 +132,7 @@ export function StatementReview({
 
           <section
             aria-label="Save statement"
-            className="sticky bottom-0 mt-5 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-panel backdrop-blur sm:p-5"
+            className="sticky bottom-0 mt-5 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-card backdrop-blur sm:p-5"
           >
             {canCreateAccount && (
               <AccountCreateForm defaultBankName={result.bankName} onCreated={onAccountCreated} />
@@ -189,7 +189,7 @@ export function StatementReview({
 function SummaryCard({ label, value, tone }: { label: string; value: string; tone?: "amber" }) {
   const amber = tone === "amber";
   return (
-    <div className={`rounded-2xl border p-4 shadow-panel sm:p-5 ${amber ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"}`}>
+    <div className={`rounded-2xl border p-4 shadow-card sm:p-5 ${amber ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"}`}>
       <p className={`truncate text-xs font-semibold uppercase tracking-[0.1em] ${amber ? "text-amber-800" : "text-slate-500"}`}>
         {label}
       </p>
